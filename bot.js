@@ -20,13 +20,13 @@ const itemCategories = {
   huges: {
     'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeGoldenBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
     'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeGoldenSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeGoldenSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
-    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
+    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi [🖼️](https://images-ext-1.discordapp.net/external/HvWsPikYqJ5AEgVw19yi6CIsKU38v0uyNsf2hbx1Ges/https/tr.rbxcdn.com/180DAY-69d0a717c564ff2d49f36bd6e2feb533/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeGoldenJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeGoldenJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeGoldenBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeGoldenBlazingBat', 'HugeRainbowBlazingBat'],
-    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChest', 'HugeGoldenFantasyChest', 'HugeRainbowFantasyChest'],
-    'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
-    'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
+    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon [🖼️](https://images-ext-1.discordapp.net/external/2jlGiikwNCiH4arrzE6DV-foWRW0SKfVvYNRD6sC6XM/https/tr.rbxcdn.com/180DAY-2eaf5436e3317efe09502f4c66031476/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPartyDragon [🖼️](https://images-ext-1.discordapp.net/external/TYyqb24G6ixiRY1MfE-HkeMMHyHRe8Y48u4PKZnq5Rc/https/tr.rbxcdn.com/180DAY-0f849ecd01a44485e9a7886e46bdaf49/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeFantasyChest', 'HugeGoldenFantasyChest', 'HugeRainbowFantasyChest'],
+    'Christmas.1 Huges': ['HugePresentChestMimic [🖼️](https://images-ext-1.discordapp.net/external/tylnJovsFHUeih_PmQPj1deoM-Rvk5HNniKZpBWRtLk/https/tr.rbxcdn.com/180DAY-a534a9bb98b6ad0ed29a4fa223ff9863/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/79VSFtB1mNrv-rsAB1MXXs2AhD06lvelkJL4vmOUkkk/https/tr.rbxcdn.com/180DAY-abd00d533241d387235e881714af1101/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/ef6b9f8ITyO6f5g7FXaH7xzVB56N9k3ZaFXAVy9WAs8/https/tr.rbxcdn.com/180DAY-ef01fde248024709d54d109f8b29a53b/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/_-6k9NMSot1joxpklz1Bm8obV0KXcrtDU0rzAc1aNbg/https/tr.rbxcdn.com/180DAY-20005c7c5848751df92ec3bb0e7a91cb/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/Xjpq3L6ZLHPvlT2FJNS3miRPMATx5yiiaZ32BhAs5sk/https/tr.rbxcdn.com/180DAY-997c4a13a2fbdabebd9b3955ca922311/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNorthPoleWolf'],
+    'Christmas.2 Huges': ['HugeIcyPhoenix [🖼️](https://images-ext-1.discordapp.net/external/QFHWkhCiDlSDXkyOVI4SaU9sfSmkJfoFUkaesfqElBY/https/tr.rbxcdn.com/180DAY-30a9f50c6792de697ae1eee492e4056b/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
+    'Map Huges': ['HugeChestMimic [🖼️](https://media.discordapp.net/attachments/1360126876437184674/1460323205695668295/HugeAtlas.png?ex=696bc577&is=696a73f7&hm=a07217d6e2be8b1b38e0e043b773e4b114f7ead33ed64b00e6bad1bc4632b1a1&=&format=webp&quality=lossless)', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat [🖼️](https://images-ext-1.discordapp.net/external/W5ThinBk1pmkW-tSv1VJL2a5G9MRBHqBQ3Ef96yD27E/https/tr.rbxcdn.com/180DAY-ecd39d21270ffc2f87860a97427e58cc/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat [🖼️](https://images-ext-1.discordapp.net/external/CR1WbXWYBFEj-USo2uJ34ZSqcANVN8B3ZkPWUPeYAcs/https/tr.rbxcdn.com/180DAY-04ef9a54a9294f73d96a7781b9ab7b03/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus [🖼️](https://images-ext-1.discordapp.net/external/rsis_A9y0JkPXqrRuoiAG4FZldwIQ_JAoQIsf1SoiIM/https/tr.rbxcdn.com/180DAY-a256fe5e47dd36c379de63f4756c853f/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenDominusAzureus [🖼️](https://images-ext-1.discordapp.net/external/Xaj1oEQQ0Dy569KN2WUsBcH_YdKjv6GuDbpcbYmdwGg/https/tr.rbxcdn.com/180DAY-da92f129bc84d45f87ecba5cc3fb0fd5/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowDominusAzureus', 'HugeNinjaCat [🖼️](https://images-ext-1.discordapp.net/external/mbWK9xEgBtPPRQ1TnCCv1mC6ZVe0lLZ5i_lcA6S_WZo/https/tr.rbxcdn.com/180DAY-d166867b83307aa63489560abe0929b5/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNinjaCat [🖼️](https://images-ext-1.discordapp.net/external/mbMN8U-FUpPkDjtjTT8eLJRq4X9ZU-O1VxPUQ6g7kJ4/https/tr.rbxcdn.com/180DAY-b3831774ef2ed55a1c3bd062a264ff8a/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNinjaCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg'],
@@ -662,8 +662,7 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
-          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -708,8 +707,7 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
-          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -965,25 +963,7 @@ client.on('interactionCreate', async (interaction) => {
       const { StringSelectMenuBuilder } = require('discord.js');
       
       let items = [];
-      if (category === 'diamonds') {
-        // Show modal for diamonds input
-        const diamondsModal = new ModalBuilder()
-          .setCustomId('trade_diamonds_modal')
-          .setTitle('Add Diamonds');
-
-        const diamondsInput = new TextInputBuilder()
-          .setCustomId('diamonds_amount')
-          .setLabel('Amount of Diamonds')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('e.g., 5000, 10K, 1M')
-          .setRequired(true);
-
-        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
-        diamondsModal.addComponents(row1);
-
-        await interaction.showModal(diamondsModal);
-        return;
-      } else if (category === 'huges') {
+      if (category === 'huges') {
         // Para huges, mostrar subcategorias
         const subcategorySelect = new StringSelectMenuBuilder()
           .setCustomId('trade_huge_subcategory_select')
@@ -1063,24 +1043,7 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
       
-      if (category === 'diamonds') {
-        const diamondsModal = new ModalBuilder()
-          .setCustomId(`offer_diamonds_modal_${messageId}`)
-          .setTitle('Add Diamonds to Offer');
-
-        const diamondsInput = new TextInputBuilder()
-          .setCustomId('offer_diamonds_amount')
-          .setLabel('Amount of Diamonds')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('e.g., 5000, 10K, 1M')
-          .setRequired(true);
-
-        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
-        diamondsModal.addComponents(row1);
-
-        await interaction.showModal(diamondsModal);
-        return;
-      } else if (category === 'huges') {
+      if (category === 'huges') {
         // Para huges, mostrar subcategorias
         const subcategorySelect = new StringSelectMenuBuilder()
           .setCustomId(`offer_huge_subcategory_select_${messageId}`)
@@ -1401,80 +1364,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isModalSubmit()) {
-    if (interaction.customId === 'trade_diamonds_modal') {
-      const diamondsStr = interaction.fields.getTextInputValue('diamonds_amount');
-      const diamonds = parseBid(diamondsStr);
-
-      if (!interaction.user.tradeItems) {
-        interaction.user.tradeItems = [];
-      }
-
-      interaction.user.tradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
-        .setCustomId('trade_continue_select')
-        .setPlaceholder('What would you like to do?')
-        .addOptions([
-          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-          { label: '➕ Add Another Category', value: 'add_category' }
-        ]);
-
-      const row = new ActionRowBuilder().addComponents(continueSelect);
-      
-      let itemsList = '';
-      interaction.user.tradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
-
-      await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
-        flags: 64 
-      });
-      return;
-    }
-
-    if (interaction.customId.startsWith('offer_diamonds_modal_')) {
-      const messageId = interaction.customId.replace('offer_diamonds_modal_', '');
-      const diamondsStr = interaction.fields.getTextInputValue('offer_diamonds_amount');
-      const diamonds = parseBid(diamondsStr);
-
-      // Store diamonds separately - don't add as item
-      if (!interaction.user.offerDiamonds) {
-        interaction.user.offerDiamonds = 0;
-      }
-      interaction.user.offerDiamonds += diamonds;
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
-        .setCustomId(`offer_continue_select_${messageId}`)
-        .setPlaceholder('What would you like to do?')
-        .addOptions([
-          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-          { label: '➕ Add Another Category', value: 'add_category' }
-        ]);
-
-      const row = new ActionRowBuilder().addComponents(continueSelect);
-      
-      let itemsList = '';
-      if (interaction.user.offerTradeItems && interaction.user.offerTradeItems.length > 0) {
-        interaction.user.offerTradeItems.forEach(item => {
-          itemsList += `${item.name} x${item.quantity}\n`;
-        });
-      }
-      if (interaction.user.offerDiamonds && interaction.user.offerDiamonds > 0) {
-        itemsList += `💎 Diamonds: ${formatBid(interaction.user.offerDiamonds)}\n`;
-      }
-
-      await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
-        flags: 64 
-      });
-      return;
     }
 
     if (interaction.customId === 'inventory_diamonds_modal') {
