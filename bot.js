@@ -787,8 +787,7 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
-          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -1522,7 +1521,7 @@ client.on('interactionCreate', async (interaction) => {
       ).join('\n') : 'None';
 
       embed.addFields({
-        name: `Items${diamonds > 0 ? ` + ${diamonds} 💎` : ''}`,
+        name: `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
         value: itemsText || 'None',
         inline: true
       });
