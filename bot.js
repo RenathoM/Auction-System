@@ -116,7 +116,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Auction System Setup')
         .setDescription('Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "bid 10000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.')
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.0.2 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.0.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -239,7 +239,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${auction.startingPrice} 💎\n**Current Bid:** ${currentBid} 💎\n**Time Remaining:** ${remaining}s`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Versão 1.0.0 | Criado por Atlas' })
+          .setFooter({ text: 'Version 1.0.3 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           const channel = interaction.guild.channels.cache.get(auction.channelId);
@@ -307,16 +307,18 @@ client.on('interactionCreate', async (interaction) => {
       const bidList = sortedBids.map(bid => {
         const secondsAgo = Math.floor((Date.now() - bid.timestamp) / 1000);
         let timeAgo;
-        if (secondsAgo < 60) timeAgo = `${secondsAgo} segundos atrás`;
-        else if (secondsAgo < 3600) timeAgo = `${Math.floor(secondsAgo / 60)} minutos atrás`;
-        else timeAgo = `${Math.floor(secondsAgo / 3600)} horas atrás`;
+        if (secondsAgo < 60) timeAgo = `${secondsAgo} seconds ago`;
+        else if (secondsAgo < 3600) timeAgo = `${Math.floor(secondsAgo / 60)} minutes ago`;
+        else timeAgo = `${Math.floor(secondsAgo / 3600)} hours ago`;
         return `${bid.user.username}: ${bid.diamonds} 💎 - ${timeAgo}`;
       }).join('\n');
 
       const embed = new EmbedBuilder()
-        .setTitle('Lista de Lances')
+        .setTitle('Bid List')
         .setDescription(bidList)
-        .setColor(0x00ff00);
+        .setColor(0x00ff00)
+        .setFooter({ text: 'Version 1.0.3 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       interaction.reply({ embeds: [embed], ephemeral: true });
     }
@@ -430,7 +432,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(title)
         .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${startingPrice} 💎\n**Current Bid:** ${startingPrice} 💎\n**Time Remaining:** ${time}s\n**Hosted by:** ${interaction.user}`)
         .setColor(0x00ff00)
-        .setFooter({ text: 'Versão 1.0.0 | Criado por Atlas' })
+        .setFooter({ text: 'Version 1.0.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
