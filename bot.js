@@ -454,6 +454,8 @@ client.on('interactionCreate', async (interaction) => {
       auction.channelId = targetChannel.id;
       auctions.set(targetChannel.id, auction);
 
+      await interaction.reply({ content: `Auction "${title}" started in ${targetChannel}!`, ephemeral: true });
+
       // Start timer
       auction.timer = setTimeout(async () => {
         clearInterval(auction.updateInterval);
