@@ -6,7 +6,7 @@ const config = require('./config.json');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-let pinAllAuctions = false;
+let redirectChannelId = null;
 
 const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId, updateInterval }
 
@@ -56,8 +56,16 @@ client.once('ready', async () => {
       ]
     },
     {
-      name: 'pinallauctions',
-      description: 'Toggle pinning of all future auctions (admin only)'
+      name: 'redirectauctions',
+      description: 'Redirect all future auctions to a specific channel (admin only)',
+      options: [
+        {
+          name: 'channel',
+          type: ApplicationCommandOptionType.Channel,
+          description: 'The channel to redirect auctions to',
+          required: true
+        }
+      ]
     },
   ];
 
@@ -235,10 +243,12 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ content: 'Auction restarted.', ephemeral: true });
     }
 
-    if (commandName === 'pinallauctions') {
+    if (commandName === 'redirectauctions') {
       if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
-      pinAllAuctions = !pinAllAuctions;
-      interaction.reply({ content: `Pinning of all auctions is now ${pinAllAuctions ? 'enabled' : 'disabled'}.`, ephemeral: true });
+      const channel = interaction.options.getChannel('channel');
+      if (channel.type !== 0) return interaction.reply({ content: 'Please select a text channel.', ephemeral: true });
+      redirectChannelId = channel.id;
+      interaction.reply({ content: `All future auctions will be redirected to ${channel}.`, ephemeral: true });
     }
   }
 
@@ -371,9 +381,12 @@ client.on('interactionCreate', async (interaction) => {
         channelId: interaction.channel.id
       };
 
+      const targetChannel = redirectChannelId ? interaction.guild.channels.cache.get(redirectChannelId) : interaction.channel;
+      if (!targetChannel) return interaction.reply({ content: 'Redirect channel not found.', ephemeral: true });
+
       const embed = new EmbedBuilder()
         .setTitle(title)
-        .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${startingPrice} 💎\n**Time Remaining:** ${time}s`)
+        .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${startingPrice} 💎\n**Time Remaining:** ${time}s\n**Hosted by:** ${interaction.user}`)
         .setColor(0x00ff00);
 
       const row = new ActionRowBuilder()
@@ -384,14 +397,15 @@ client.on('interactionCreate', async (interaction) => {
             .setStyle(ButtonStyle.Primary)
         );
 
-      const message = await interaction.reply({ embeds: [embed], components: [row] });
+      const message = await targetChannel.send({ embeds: [embed], components: [row] });
       auction.messageId = message.id;
-      auctions.set(interaction.channel.id, auction);
+      auction.channelId = targetChannel.id;
+      auctions.set(targetChannel.id, auction);
 
       // Start timer
       auction.timer = setTimeout(async () => {
         clearInterval(auction.updateInterval);
-        await endAuction(interaction.channel);
+        await endAuction(targetChannel);
       }, time * 1000);
 
       // Update embed every second
@@ -403,7 +417,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         const updatedEmbed = new EmbedBuilder()
           .setTitle(auction.title)
-          .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${auction.startingPrice} 💎\n**Time Remaining:** ${remaining}s`)
+          .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${auction.startingPrice} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00);
         try {
           await message.edit({ embeds: [updatedEmbed], components: [row] });
@@ -411,15 +425,6 @@ client.on('interactionCreate', async (interaction) => {
           // ignore if message deleted
         }
       }, 1000);
-
-      // Pin if enabled
-      if (pinAllAuctions) {
-        try {
-          await message.pin();
-        } catch (e) {
-          // ignore pin errors
-        }
-      }
     }
   }
 });
