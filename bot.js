@@ -6,7 +6,7 @@ const config = require('./config.json');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-const auctions = new Map(); // channelId -> { host, item, model, bids: [{user, diamonds, items}], timer, started }
+const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId }
 
 client.once('ready', async () => {
   console.log('Auction Bot is ready!');
@@ -14,27 +14,8 @@ client.once('ready', async () => {
   // Register slash commands
   const commands = [
     {
-      name: 'startauction',
-      description: 'Start a new auction',
-      options: [
-        {
-          name: 'item',
-          type: ApplicationCommandOptionType.String,
-          description: 'The item being auctioned',
-          required: true
-        },
-        {
-          name: 'model',
-          type: ApplicationCommandOptionType.String,
-          description: 'Auction model: diamonds, items, or both',
-          required: true,
-          choices: [
-            { name: 'Diamonds only', value: 'diamonds' },
-            { name: 'Items only', value: 'items' },
-            { name: 'Both', value: 'both' }
-          ]
-        }
-      ]
+      name: 'setup',
+      description: 'Show auction setup information'
     },
     {
       name: 'bid',
@@ -47,6 +28,42 @@ client.once('ready', async () => {
     {
       name: 'auctionstatus',
       description: 'View current auction status'
+    },
+    {
+      name: 'deleteauction',
+      description: 'Delete an auction (admin only)',
+      options: [
+        {
+          name: 'messageid',
+          type: ApplicationCommandOptionType.String,
+          description: 'The message ID of the auction',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'endauctionadmin',
+      description: 'End an auction timer (admin only)',
+      options: [
+        {
+          name: 'messageid',
+          type: ApplicationCommandOptionType.String,
+          description: 'The message ID of the auction',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'restartauction',
+      description: 'Restart an auction (admin only)',
+      options: [
+        {
+          name: 'messageid',
+          type: ApplicationCommandOptionType.String,
+          description: 'The message ID of the auction',
+          required: true
+        }
+      ]
     }
   ];
 
@@ -56,7 +73,7 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  const auction = auctions.get(message.channel.id);
+  const auction = Array.from(auctions.values()).find(a => a.channelId === message.channel.id);
   if (!auction) return;
 
   // Parse bid messages
@@ -88,47 +105,25 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isCommand()) {
     const { commandName } = interaction;
 
-    if (commandName === 'startauction') {
-      const item = interaction.options.getString('item');
-      const model = interaction.options.getString('model');
-
-      if (auctions.has(interaction.channel.id)) {
-        return interaction.reply({ content: 'An auction is already running in this channel.', ephemeral: true });
-      }
-
-      const auction = {
-        host: interaction.user,
-        item,
-        model,
-        bids: [],
-        started: new Date()
-      };
-
-      auctions.set(interaction.channel.id, auction);
-
+    if (commandName === 'setup') {
       const embed = new EmbedBuilder()
-        .setTitle('Auction Started!')
-        .setDescription(`Item: ${item}\nModel: ${model}\nTime: ${config.auctionTime} seconds`)
+        .setTitle('Auction System Setup')
+        .setDescription('Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "I\'ll bid 10,000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.')
         .setColor(0x00ff00);
 
       const row = new ActionRowBuilder()
         .addComponents(
           new ButtonBuilder()
-            .setCustomId('bid_button')
-            .setLabel('Bid')
+            .setCustomId('create_auction')
+            .setLabel('Create Auction')
             .setStyle(ButtonStyle.Primary)
         );
 
-      await interaction.reply({ embeds: [embed], components: [row] });
-
-      // Start timer
-      auction.timer = setTimeout(async () => {
-        await endAuction(interaction.channel);
-      }, config.auctionTime * 1000);
+      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
 
     if (commandName === 'bid') {
-      const auction = auctions.get(interaction.channel.id);
+      const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running in this channel.', ephemeral: true });
 
       // Show modal
@@ -159,7 +154,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'endauction') {
-      const auction = auctions.get(interaction.channel.id);
+      const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running.', ephemeral: true });
       if (auction.host.id !== interaction.user.id) return interaction.reply({ content: 'Only the host can end the auction.', ephemeral: true });
 
@@ -169,22 +164,65 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'auctionstatus') {
-      const auction = auctions.get(interaction.channel.id);
+      const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running.', ephemeral: true });
 
       const embed = new EmbedBuilder()
         .setTitle('Auction Status')
-        .setDescription(`Item: ${auction.item}\nModel: ${auction.model}\nBids: ${auction.bids.length}`)
+        .setDescription(`Title: ${auction.title}\nDescription: ${auction.description}\nModel: ${auction.model}\nStarting Price: ${auction.startingPrice} 💎\nTime Left: ${Math.max(0, auction.time - Math.floor((Date.now() - auction.started) / 1000))} seconds\nBids: ${auction.bids.length}`)
         .setColor(0x0000ff);
 
       interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+    const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+
+    if (commandName === 'deleteauction') {
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+      const messageId = interaction.options.getString('messageid');
+      const auction = Array.from(auctions.values()).find(a => a.messageId === messageId);
+      if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
+
+      try {
+        const message = await interaction.channel.messages.fetch(messageId);
+        await message.delete();
+      } catch (e) {
+        // ignore if message not found
+      }
+      auctions.delete(auction.channelId);
+      interaction.reply({ content: 'Auction deleted.', ephemeral: true });
+    }
+
+    if (commandName === 'endauctionadmin') {
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+      const messageId = interaction.options.getString('messageid');
+      const auction = Array.from(auctions.values()).find(a => a.messageId === messageId);
+      if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
+
+      clearTimeout(auction.timer);
+      await endAuction(interaction.guild.channels.cache.get(auction.channelId));
+      interaction.reply({ content: 'Auction ended.', ephemeral: true });
+    }
+
+    if (commandName === 'restartauction') {
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+      const messageId = interaction.options.getString('messageid');
+      const auction = Array.from(auctions.values()).find(a => a.messageId === messageId);
+      if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
+
+      clearTimeout(auction.timer);
+      auction.started = new Date();
+      auction.timer = setTimeout(async () => {
+        await endAuction(interaction.guild.channels.cache.get(auction.channelId));
+      }, auction.time * 1000);
+      interaction.reply({ content: 'Auction restarted.', ephemeral: true });
     }
   }
 
   if (interaction.isButton()) {
     if (interaction.customId === 'bid_button') {
-      // Same as /bid
-      const auction = auctions.get(interaction.channel.id);
+      const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running.', ephemeral: true });
 
       const modal = new ModalBuilder()
@@ -212,11 +250,57 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.showModal(modal);
     }
+
+    if (interaction.customId === 'create_auction') {
+      const modal = new ModalBuilder()
+        .setCustomId('auction_modal')
+        .setTitle('Create Auction');
+
+      const titleInput = new TextInputBuilder()
+        .setCustomId('title')
+        .setLabel('Auction Title')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      const descInput = new TextInputBuilder()
+        .setCustomId('description')
+        .setLabel('Description')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true);
+
+      const timeInput = new TextInputBuilder()
+        .setCustomId('time')
+        .setLabel('Time (seconds)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      const priceInput = new TextInputBuilder()
+        .setCustomId('starting_price')
+        .setLabel('Starting Price (💎)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      const modelInput = new TextInputBuilder()
+        .setCustomId('model')
+        .setLabel('Model (diamonds/items/both)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(titleInput),
+        new ActionRowBuilder().addComponents(descInput),
+        new ActionRowBuilder().addComponents(timeInput),
+        new ActionRowBuilder().addComponents(priceInput),
+        new ActionRowBuilder().addComponents(modelInput)
+      );
+
+      await interaction.showModal(modal);
+    }
   }
 
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'bid_modal') {
-      const auction = auctions.get(interaction.channel.id);
+      const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running.', ephemeral: true });
 
       const diamondsStr = interaction.fields.getTextInputValue('diamonds');
@@ -234,6 +318,58 @@ client.on('interactionCreate', async (interaction) => {
 
       auction.bids.push({ user: interaction.user, diamonds, items });
       interaction.reply(`Bid placed: ${diamonds > 0 ? `${diamonds} 💎` : ''}${items ? ` and ${items}` : ''}`);
+    }
+
+    if (interaction.customId === 'auction_modal') {
+      const title = interaction.fields.getTextInputValue('title');
+      const description = interaction.fields.getTextInputValue('description');
+      const timeStr = interaction.fields.getTextInputValue('time');
+      const startingPriceStr = interaction.fields.getTextInputValue('starting_price');
+      const model = interaction.fields.getTextInputValue('model').toLowerCase();
+
+      if (!['diamonds', 'items', 'both'].includes(model)) return interaction.reply({ content: 'Invalid model. Use diamonds, items, or both.', ephemeral: true });
+      const time = parseInt(timeStr);
+      if (isNaN(time) || time <= 0) return interaction.reply({ content: 'Invalid time.', ephemeral: true });
+      const startingPrice = parseInt(startingPriceStr);
+      if (isNaN(startingPrice) || startingPrice < 0) return interaction.reply({ content: 'Invalid starting price.', ephemeral: true });
+
+      if (Array.from(auctions.values()).some(a => a.channelId === interaction.channel.id)) {
+        return interaction.reply({ content: 'An auction is already running in this channel.', ephemeral: true });
+      }
+
+      const auction = {
+        host: interaction.user,
+        title,
+        description,
+        model,
+        time,
+        startingPrice,
+        bids: [],
+        started: new Date(),
+        channelId: interaction.channel.id
+      };
+
+      const embed = new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(`${description}\n\n**Model:** ${model}\n**Starting Price:** ${startingPrice} 💎\n**Time:** ${time} seconds`)
+        .setColor(0x00ff00);
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('bid_button')
+            .setLabel('Bid')
+            .setStyle(ButtonStyle.Primary)
+        );
+
+      const message = await interaction.reply({ embeds: [embed], components: [row] });
+      auction.messageId = message.id;
+      auctions.set(interaction.channel.id, auction);
+
+      // Start timer
+      auction.timer = setTimeout(async () => {
+        await endAuction(interaction.channel);
+      }, time * 1000);
     }
   }
 });
@@ -254,10 +390,10 @@ async function endAuction(channel) {
 
   const embed = new EmbedBuilder()
     .setTitle('Auction Ended!')
-    .setDescription(`Item: ${auction.item}\nWinner: ${winner.user}\nBid: ${winner.diamonds} 💎${winner.items ? ` and ${winner.items}` : ''}`)
+    .setDescription(`**Title:** ${auction.title}\n**Winner:** ${winner.user}\n**Bid:** ${winner.diamonds} 💎${winner.items ? ` and ${winner.items}` : ''}`)
     .setColor(0xff0000);
 
   channel.send({ embeds: [embed] });
 }
 
-client.login(config.token);
+client.login(process.env.TOKEN || config.token);
