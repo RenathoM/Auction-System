@@ -6,8 +6,8 @@ const config = require('./config.json');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-let redirectChannelId = null;
-let redirectTradeChannelId = null;
+let redirectChannelId = '1461491732507267205'; // Auction System Setup - Embed
+let redirectTradeChannelId = '1461778939222687948'; // Trade System Setup - Embed
 let redirectInventoryChannelId = null;
 
 // Image upload channels
@@ -25,15 +25,15 @@ const MAX_DIAMONDS = 1000000000;
 // Item categories for trades
 const itemCategories = {
   huges: {
-    'Black Hole Huges': ['HugeBlackHoleAngelus [🖼️](https://media.discordapp.net/attachments/1360126876437184674/1461849614092341420/HugeBackHoleAngelus.png?ex=696c0d0b&is=696abb8b&hm=96e3b0e547d51d8ec551326376a1bbaec39c821f3ce85b9fea8be1a4a40849dc&=&format=webp&quality=lossless&width=350&height=350)', 'HugeRainbowBlackHoleAngelus'],
+    'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
     'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
-    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi [🖼️](https://images-ext-1.discordapp.net/external/HvWsPikYqJ5AEgVw19yi6CIsKU38v0uyNsf2hbx1Ges/https/tr.rbxcdn.com/180DAY-69d0a717c564ff2d49f36bd6e2feb533/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
+    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon [🖼️](https://images-ext-1.discordapp.net/external/2jlGiikwNCiH4arrzE6DV-foWRW0SKfVvYNRD6sC6XM/https/tr.rbxcdn.com/180DAY-2eaf5436e3317efe09502f4c66031476/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPartyDragon [🖼️](https://images-ext-1.discordapp.net/external/TYyqb24G6ixiRY1MfE-HkeMMHyHRe8Y48u4PKZnq5Rc/https/tr.rbxcdn.com/180DAY-0f849ecd01a44485e9a7886e46bdaf49/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeFantasyChest', 'HugeGoldenFantasyChest', 'HugeRainbowFantasyChest'],
-    'Christmas.1 Huges': ['HugePresentChestMimic [🖼️](https://images-ext-1.discordapp.net/external/tylnJovsFHUeih_PmQPj1deoM-Rvk5HNniKZpBWRtLk/https/tr.rbxcdn.com/180DAY-a534a9bb98b6ad0ed29a4fa223ff9863/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/79VSFtB1mNrv-rsAB1MXXs2AhD06lvelkJL4vmOUkkk/https/tr.rbxcdn.com/180DAY-abd00d533241d387235e881714af1101/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/ef6b9f8ITyO6f5g7FXaH7xzVB56N9k3ZaFXAVy9WAs8/https/tr.rbxcdn.com/180DAY-ef01fde248024709d54d109f8b29a53b/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/_-6k9NMSot1joxpklz1Bm8obV0KXcrtDU0rzAc1aNbg/https/tr.rbxcdn.com/180DAY-20005c7c5848751df92ec3bb0e7a91cb/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/Xjpq3L6ZLHPvlT2FJNS3miRPMATx5yiiaZ32BhAs5sk/https/tr.rbxcdn.com/180DAY-997c4a13a2fbdabebd9b3955ca922311/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNorthPoleWolf'],
-    'Christmas.2 Huges': ['HugeIcyPhoenix [🖼️](https://images-ext-1.discordapp.net/external/QFHWkhCiDlSDXkyOVI4SaU9sfSmkJfoFUkaesfqElBY/https/tr.rbxcdn.com/180DAY-30a9f50c6792de697ae1eee492e4056b/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic [🖼️](https://media.discordapp.net/attachments/1360126876437184674/1460323205695668295/HugeAtlas.png?ex=696bc577&is=696a73f7&hm=a07217d6e2be8b1b38e0e043b773e4b114f7ead33ed64b00e6bad1bc4632b1a1&=&format=webp&quality=lossless)', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat [🖼️](https://images-ext-1.discordapp.net/external/W5ThinBk1pmkW-tSv1VJL2a5G9MRBHqBQ3Ef96yD27E/https/tr.rbxcdn.com/180DAY-ecd39d21270ffc2f87860a97427e58cc/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat [🖼️](https://images-ext-1.discordapp.net/external/CR1WbXWYBFEj-USo2uJ34ZSqcANVN8B3ZkPWUPeYAcs/https/tr.rbxcdn.com/180DAY-04ef9a54a9294f73d96a7781b9ab7b03/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus [🖼️](https://images-ext-1.discordapp.net/external/rsis_A9y0JkPXqrRuoiAG4FZldwIQ_JAoQIsf1SoiIM/https/tr.rbxcdn.com/180DAY-a256fe5e47dd36c379de63f4756c853f/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenDominusAzureus [🖼️](https://images-ext-1.discordapp.net/external/Xaj1oEQQ0Dy569KN2WUsBcH_YdKjv6GuDbpcbYmdwGg/https/tr.rbxcdn.com/180DAY-da92f129bc84d45f87ecba5cc3fb0fd5/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowDominusAzureus', 'HugeNinjaCat [🖼️](https://images-ext-1.discordapp.net/external/mbWK9xEgBtPPRQ1TnCCv1mC6ZVe0lLZ5i_lcA6S_WZo/https/tr.rbxcdn.com/180DAY-d166867b83307aa63489560abe0929b5/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNinjaCat [🖼️](https://images-ext-1.discordapp.net/external/mbMN8U-FUpPkDjtjTT8eLJRq4X9ZU-O1VxPUQ6g7kJ4/https/tr.rbxcdn.com/180DAY-b3831774ef2ed55a1c3bd062a264ff8a/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNinjaCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
+    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeFantasyChest', 'HugeGoldenFantasyChest', 'HugeRainbowFantasyChest'],
+    'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
+    'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg'],
@@ -260,7 +260,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Auction System Setup')
         .setDescription('Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "bid 10000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.')
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -417,7 +417,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Current Bid:** ${formatBid(currentBid)} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+          .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           const channel = interaction.guild.channels.cache.get(auction.channelId);
@@ -721,6 +721,7 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`offer_category_select_${interaction.message.id}`)
         .setPlaceholder('Select an item category')
         .addOptions([
+          { label: 'Diamantes', value: 'diamonds', emoji: '💎' },
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
@@ -1123,6 +1124,26 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
       
+      if (category === 'diamonds') {
+        // Handle diamonds selection
+        const diamondsModal = new ModalBuilder()
+          .setCustomId(`offer_diamonds_modal_${messageId}`)
+          .setTitle('Add Diamonds to Your Offer');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('offer_diamonds_amount')
+          .setLabel('Amount of Diamonds')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('10000')
+          .setRequired(true);
+
+        const row = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row);
+        
+        await interaction.showModal(diamondsModal);
+        return;
+      }
+      
       if (category === 'huges') {
         // Para huges, mostrar subcategorias
         const subcategorySelect = new StringSelectMenuBuilder()
@@ -1255,6 +1276,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId(`offer_category_select_${messageId}`)
           .setPlaceholder('Select another item category')
           .addOptions([
+            { label: 'Diamantes', value: 'diamonds', emoji: '💎' },
             { label: 'Huges', value: 'huges', emoji: '🔥' },
             { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
             { label: 'Eggs', value: 'eggs', emoji: '🥚' },
@@ -1473,9 +1495,26 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`Auction Image - ${auction.title}`)
           .setDescription(`**Auction Winner:** ${auction.winnerUser}\n**Bid:** ${formatBid(auction.bids[0].diamonds)} 💎\n\n${imageUrl}`)
           .setColor(0xff0000)
+          .setThumbnail(imageUrl)
           .setFooter({ text: `Uploaded by ${interaction.user.username}` });
 
         await imagesChannel.send({ embeds: [embed] });
+
+        // Update the original auction message with the thumbnail
+        try {
+          const auctionChannel = await interaction.guild.channels.fetch(auction.channelId);
+          if (auctionChannel) {
+            const originalMessage = await auctionChannel.messages.fetch(auction.finalMessageId);
+            if (originalMessage && originalMessage.embeds.length > 0) {
+              const updatedEmbed = new EmbedBuilder(originalMessage.embeds[0])
+                .setThumbnail(imageUrl);
+              await originalMessage.edit({ embeds: [updatedEmbed] });
+            }
+          }
+        } catch (e) {
+          // Ignore if original message cannot be updated
+        }
+
         await interaction.reply({ content: '✅ Image uploaded successfully!', ephemeral: true });
       } catch (e) {
         console.error('Error uploading auction image:', e);
@@ -1505,9 +1544,26 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle('Trade Image')
           .setDescription(`**Host:** ${trade.host}\n**Guest:** ${trade.acceptedUser}\n\n${imageUrl}`)
           .setColor(0x00ff00)
+          .setThumbnail(imageUrl)
           .setFooter({ text: `Uploaded by ${interaction.user.username}` });
 
         await imagesChannel.send({ embeds: [embed] });
+
+        // Update the original trade message with the thumbnail
+        try {
+          const tradeChannel = await interaction.guild.channels.fetch(trade.channelId);
+          if (tradeChannel) {
+            const originalMessage = await tradeChannel.messages.fetch(messageId);
+            if (originalMessage && originalMessage.embeds.length > 0) {
+              const updatedEmbed = new EmbedBuilder(originalMessage.embeds[0])
+                .setThumbnail(imageUrl);
+              await originalMessage.edit({ embeds: [updatedEmbed] });
+            }
+          }
+        } catch (e) {
+          // Ignore if original message cannot be updated
+        }
+
         await interaction.reply({ content: '✅ Image uploaded successfully!', ephemeral: true });
       } catch (e) {
         console.error('Error uploading trade image:', e);
@@ -1923,7 +1979,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Trade Offer')
         .setDescription(`**Host:** ${interaction.user}\n**Status:** Waiting for offers`)
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format host items with quantities
@@ -1973,6 +2029,55 @@ client.on('interactionCreate', async (interaction) => {
       userTradeCount.set(interaction.user.id, currentCount + 1);
 
       await interaction.reply({ content: `Trade offer created in ${targetChannel}! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
+      return;
+    }
+
+    if (interaction.customId.startsWith('offer_diamonds_modal_')) {
+      const messageId = interaction.customId.replace('offer_diamonds_modal_', '');
+      const diamondsStr = interaction.fields.getTextInputValue('offer_diamonds_amount') || '0';
+
+      let diamonds = parseBid(diamondsStr);
+
+      if (diamonds > MAX_DIAMONDS) {
+        return interaction.reply({ content: `You cannot offer more than ${formatBid(MAX_DIAMONDS)} diamonds.`, flags: 64 });
+      }
+
+      // Store diamonds in user session
+      if (!interaction.user.offerTradeItems) {
+        interaction.user.offerTradeItems = [];
+      }
+      
+      // Store the diamonds amount
+      interaction.user.offerDiamonds = (interaction.user.offerDiamonds || 0) + diamonds;
+
+      // Show option to add more categories or proceed
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`offer_continue_select_${messageId}`)
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+          { label: '➕ Add More', value: 'add_category' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let displayText = `**Your Offer So Far:**\n`;
+      if (interaction.user.offerDiamonds > 0) {
+        displayText += `💎 Diamonds: ${formatBid(interaction.user.offerDiamonds)}\n`;
+      }
+      if (interaction.user.offerTradeItems && interaction.user.offerTradeItems.length > 0) {
+        interaction.user.offerTradeItems.forEach(item => {
+          displayText += `${item.name} x${item.quantity}\n`;
+        });
+      }
+
+      await interaction.reply({ 
+        content: displayText + `\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
       return;
     }
 
@@ -2094,7 +2199,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(title)
         .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${formatBid(startingPrice)} 💎\n**Current Bid:** ${formatBid(startingPrice)} 💎\n**Time Remaining:** ${time}s\n**Hosted by:** ${interaction.user}`)
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -2134,7 +2239,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Current Bid:** ${formatBid(currentBid)} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+          .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           await message.edit({ embeds: [updatedEmbed], components: [row] });
@@ -2160,7 +2265,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
     const embed = new EmbedBuilder()
       .setTitle('Trade Offer')
       .setColor(trade.accepted ? 0x00ff00 : 0x0099ff)
-      .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+      .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
       .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
     if (trade.accepted) {
