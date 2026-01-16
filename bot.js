@@ -13,10 +13,20 @@ const trades = new Map(); // messageId -> { host, hostDiamonds, hostItems, offer
 
 // Item categories for trades
 const itemCategories = {
-  huges: ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeBlazingShark', 'HugeGoldenBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeGoldenBlazingBat', 'HugeRainbowBlazingBat', 'HugeSnowGlobeHamster', 'HugeGoldenSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeGoldenSnowGlobeCat', 'HugeRainbowSnowGlobeCat', 'HugeIceCubeGingerbreadCorgi', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat', 'HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix', 'HugeJellyDragon', 'HugeGoldenJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeGoldenJellyKitsune', 'HugeRainbowJellyKitsune', 'HugePresentChestMimic', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeBlackHoleAngelus', 'HugeGoldenBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeRainbowFantasyChestMimic', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog'],
-  exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeGoldenHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BHAxolotl', 'BHGoldenAxolotl', 'BHRainbowAxolotl', 'BHImmortuus', 'BHGoldenImmortuus', 'BHRainbowImmortuus', 'BHKitsune', 'BHGoldenKitsune', 'BHRainbowKitsune'],
+  huges: {
+    'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeGoldenBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
+    'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeGoldenSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeGoldenSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
+    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
+    'Jelly Huges': ['HugeJellyDragon', 'HugeGoldenJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeGoldenJellyKitsune', 'HugeRainbowJellyKitsune'],
+    'Blazing Huges': ['HugeBlazingShark', 'HugeGoldenBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeGoldenBlazingBat', 'HugeRainbowBlazingBat'],
+    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat'],
+    'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
+    'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
+  },
+  exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BHAxolotl', 'BHGoldenAxolotl', 'BHRainbowAxolotl', 'BHImmortuus', 'BHGoldenImmortuus', 'BHRainbowImmortuus', 'BHKitsune', 'BHGoldenKitsune', 'BHRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BHEgg'],
-  gifts: ['LikeGoalLootbox']
+  gifts: ['LikeGoalLootbox', '2026LootBox', 'SpintheWheellootbox']
 };
 
 client.once('ready', async () => {
@@ -478,7 +488,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'trade_offer_button') {
       const trade = trades.get(interaction.message.id);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', ephemeral: true });
+      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
 
       // Show category selection for offer
       const { StringSelectMenuBuilder } = require('discord.js');
@@ -494,7 +504,12 @@ client.on('interactionCreate', async (interaction) => {
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
-      await interaction.reply({ content: 'Select an item category for your offer:', components: [row], ephemeral: true });
+      
+      // Initialize offer items for this user
+      interaction.user.offerTradeItems = [];
+      interaction.user.offerMessageId = interaction.message.id;
+      
+      await interaction.reply({ content: 'Select an item category for your offer:', components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('trade_accept_')) {
@@ -540,7 +555,24 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
       
-      const items = itemCategories[category];
+      let items = [];
+      if (category === 'huges') {
+        // Para huges, mostrar subcategorias
+        const subcategorySelect = new StringSelectMenuBuilder()
+          .setCustomId('trade_huge_subcategory_select')
+          .setPlaceholder('Select a Huge subcategory')
+          .addOptions(Object.keys(itemCategories.huges).map(sub => ({
+            label: sub,
+            value: sub
+          })));
+        const row = new ActionRowBuilder().addComponents(subcategorySelect);
+        await interaction.reply({ content: `Select a subcategory from **Huges**:`, components: [row], flags: 64 });
+        return;
+      } else {
+        items = itemCategories[category];
+      }
+      
+      // Para outras categorias
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`trade_item_select_${category}`)
         .setPlaceholder(`Select items from ${category}`)
@@ -548,48 +580,75 @@ client.on('interactionCreate', async (interaction) => {
         .addOptions(items.slice(0, 25).map(item => ({ label: item, value: item })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], ephemeral: true });
+      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+    }
+
+    if (interaction.customId === 'trade_huge_subcategory_select') {
+      const subcategory = interaction.values[0];
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const items = itemCategories.huges[subcategory];
+      const itemSelect = new StringSelectMenuBuilder()
+        .setCustomId(`trade_item_select_huges_${subcategory}`)
+        .setPlaceholder(`Select items from ${subcategory}`)
+        .setMaxValues(Math.min(items.length, 25))
+        .addOptions(items.map(item => ({ label: item, value: item })));
+
+      const row = new ActionRowBuilder().addComponents(itemSelect);
+      await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('trade_item_select_')) {
-      const category = interaction.customId.replace('trade_item_select_', '');
+      const parts = interaction.customId.replace('trade_item_select_', '').split('_');
+      let category = parts[0];
+      let subcategory = parts.length > 1 ? parts.slice(1).join('_') : null;
+      
       const selectedItems = interaction.values;
 
-      // Store selected items in user's session and show diamonds/user option
-      const diamondsModal = new ModalBuilder()
-        .setCustomId('trade_setup_modal')
-        .setTitle('Complete Your Trade Offer');
+      // Store items selection for quantity input
+      interaction.user.selectedTradeItems = selectedItems;
+      interaction.user.selectedTradeCategory = category;
+      interaction.user.selectedTradeSubcategory = subcategory;
 
-      const diamondsInput = new TextInputBuilder()
-        .setCustomId('trade_diamonds')
-        .setLabel('Diamonds (optional)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('0')
-        .setRequired(false);
+      // Show quantity selection modal
+      const quantityModal = new ModalBuilder()
+        .setCustomId(`trade_item_quantities_modal`)
+        .setTitle('Select Quantities');
 
-      const userInput = new TextInputBuilder()
-        .setCustomId('trade_target_user')
-        .setLabel('Target User (optional)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Leave empty for open trade')
-        .setRequired(false);
+      let inputs = [];
+      selectedItems.slice(0, 5).forEach((item, index) => {
+        const input = new TextInputBuilder()
+          .setCustomId(`qty_${index}`)
+          .setLabel(`${item} quantity`)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('1')
+          .setRequired(true)
+          .setMaxLength(3);
+        inputs.push(new ActionRowBuilder().addComponents(input));
+      });
 
-      const row1 = new ActionRowBuilder().addComponents(diamondsInput);
-      const row2 = new ActionRowBuilder().addComponents(userInput);
-
-      diamondsModal.addComponents(row1, row2);
-
-      // Store items in interaction metadata
-      interaction.user.tradeItems = selectedItems;
-      interaction.user.tradeCategory = category;
-
-      await interaction.showModal(diamondsModal);
+      quantityModal.addComponents(inputs);
+      await interaction.showModal(quantityModal);
     }
 
     if (interaction.customId.startsWith('offer_category_select_')) {
       const messageId = interaction.customId.replace('offer_category_select_', '');
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
+      
+      if (category === 'huges') {
+        // Para huges, mostrar subcategorias
+        const subcategorySelect = new StringSelectMenuBuilder()
+          .setCustomId(`offer_huge_subcategory_select_${messageId}`)
+          .setPlaceholder('Select a Huge subcategory')
+          .addOptions(Object.keys(itemCategories.huges).map(sub => ({
+            label: sub,
+            value: sub
+          })));
+        const row = new ActionRowBuilder().addComponents(subcategorySelect);
+        await interaction.reply({ content: `Select a subcategory from **Huges**:`, components: [row], flags: 64 });
+        return;
+      }
       
       const items = itemCategories[category];
       const itemSelect = new StringSelectMenuBuilder()
@@ -599,35 +658,240 @@ client.on('interactionCreate', async (interaction) => {
         .addOptions(items.slice(0, 25).map(item => ({ label: item, value: item })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], ephemeral: true });
+      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+    }
+
+    if (interaction.customId.startsWith('offer_huge_subcategory_select_')) {
+      const messageId = interaction.customId.replace('offer_huge_subcategory_select_', '');
+      const subcategory = interaction.values[0];
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const items = itemCategories.huges[subcategory];
+      const itemSelect = new StringSelectMenuBuilder()
+        .setCustomId(`offer_item_select_${messageId}_huges_${subcategory}`)
+        .setPlaceholder(`Select items from ${subcategory}`)
+        .setMaxValues(Math.min(items.length, 25))
+        .addOptions(items.map(item => ({ label: item, value: item })));
+
+      const row = new ActionRowBuilder().addComponents(itemSelect);
+      await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('offer_item_select_')) {
       const parts = interaction.customId.replace('offer_item_select_', '').split('_');
       const messageId = parts[0];
-      const category = parts[1];
+      let category = parts[1];
+      let subcategory = parts.length > 2 ? parts.slice(2).join('_') : null;
       const selectedItems = interaction.values;
 
-      // Show diamonds modal for offer
-      const diamondsModal = new ModalBuilder()
-        .setCustomId(`offer_submit_modal_${messageId}`)
-        .setTitle('Complete Your Offer');
+      // Store items selection for quantity input
+      interaction.user.selectedOfferItems = selectedItems;
+      interaction.user.selectedOfferCategory = category;
+      interaction.user.selectedOfferSubcategory = subcategory;
+      interaction.user.selectedOfferMessageId = messageId;
 
-      const diamondsInput = new TextInputBuilder()
-        .setCustomId('offer_diamonds')
-        .setLabel('Diamonds (optional)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('0')
-        .setRequired(false);
+      // Show quantity selection modal
+      const quantityModal = new ModalBuilder()
+        .setCustomId(`offer_item_quantities_modal_${messageId}`)
+        .setTitle('Select Quantities');
 
-      const row1 = new ActionRowBuilder().addComponents(diamondsInput);
-      diamondsModal.addComponents(row1);
+      let inputs = [];
+      selectedItems.slice(0, 5).forEach((item, index) => {
+        const input = new TextInputBuilder()
+          .setCustomId(`offer_qty_${index}`)
+          .setLabel(`${item} quantity`)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('1')
+          .setRequired(true)
+          .setMaxLength(3);
+        inputs.push(new ActionRowBuilder().addComponents(input));
+      });
 
-      // Store items in interaction metadata
-      interaction.user.offerItems = selectedItems;
-      interaction.user.messageId = messageId;
+      quantityModal.addComponents(inputs);
+      await interaction.showModal(quantityModal);
+    }
 
-      await interaction.showModal(diamondsModal);
+    if (interaction.customId === 'trade_continue_select') {
+      const choice = interaction.values[0];
+
+      if (choice === 'add_category') {
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const categorySelect = new StringSelectMenuBuilder()
+          .setCustomId('trade_category_select')
+          .setPlaceholder('Select another item category')
+          .addOptions([
+            { label: 'Huges', value: 'huges', emoji: '🔥' },
+            { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+            { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+            { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          ]);
+
+        const row = new ActionRowBuilder().addComponents(categorySelect);
+        await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
+      } else if (choice === 'confirm_items') {
+        // Move to diamonds and target user
+        const diamondsModal = new ModalBuilder()
+          .setCustomId('trade_setup_modal')
+          .setTitle('Complete Your Trade Offer');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('trade_diamonds')
+          .setLabel('Diamonds (optional)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('0')
+          .setRequired(false);
+
+        const userInput = new TextInputBuilder()
+          .setCustomId('trade_target_user')
+          .setLabel('Target User (optional)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Leave empty for open trade')
+          .setRequired(false);
+
+        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+        const row2 = new ActionRowBuilder().addComponents(userInput);
+
+        diamondsModal.addComponents(row1, row2);
+        await interaction.showModal(diamondsModal);
+      }
+    }
+
+    if (interaction.customId.startsWith('offer_continue_select_')) {
+      const messageId = interaction.customId.replace('offer_continue_select_', '');
+      const choice = interaction.values[0];
+
+      if (choice === 'add_category') {
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const categorySelect = new StringSelectMenuBuilder()
+          .setCustomId(`offer_category_select_${messageId}`)
+          .setPlaceholder('Select another item category')
+          .addOptions([
+            { label: 'Huges', value: 'huges', emoji: '🔥' },
+            { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+            { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+            { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          ]);
+
+        const row = new ActionRowBuilder().addComponents(categorySelect);
+        await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
+      } else if (choice === 'confirm_items') {
+        // Move to diamonds and submit
+        const diamondsModal = new ModalBuilder()
+          .setCustomId(`offer_submit_modal_${messageId}`)
+          .setTitle('Complete Your Offer');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('offer_diamonds')
+          .setLabel('Diamonds (optional)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('0')
+          .setRequired(false);
+
+        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row1);
+        
+        // Store items in interaction metadata
+        interaction.user.offerItems = interaction.user.offerTradeItems || [];
+        interaction.user.messageId = messageId;
+        delete interaction.user.offerTradeItems;
+        delete interaction.user.selectedOfferItems;
+        delete interaction.user.selectedOfferCategory;
+        delete interaction.user.selectedOfferSubcategory;
+        delete interaction.user.selectedOfferMessageId;
+
+        await interaction.showModal(diamondsModal);
+      }
+    }
+  }
+
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'trade_item_quantities_modal') {
+      const selectedItems = interaction.user.selectedTradeItems || [];
+      const category = interaction.user.selectedTradeCategory;
+      const subcategory = interaction.user.selectedTradeSubcategory;
+
+      // Process quantities
+      const itemsWithQty = selectedItems.map((item, index) => {
+        const qty = parseInt(interaction.fields.getTextInputValue(`qty_${index}`) || '1');
+        return { name: item, quantity: Math.max(1, qty) };
+      });
+
+      // Store in user's session
+      if (!interaction.user.tradeItems) {
+        interaction.user.tradeItems = [];
+      }
+      interaction.user.tradeItems = interaction.user.tradeItems.concat(itemsWithQty);
+
+      // Show option to add more categories or proceed
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId('trade_continue_select')
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+          { label: '➕ Add Another Category', value: 'add_category' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.tradeItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
+      return;
+    }
+
+    if (interaction.customId.startsWith('offer_item_quantities_modal_')) {
+      const messageId = interaction.customId.replace('offer_item_quantities_modal_', '');
+      const selectedItems = interaction.user.selectedOfferItems || [];
+      const category = interaction.user.selectedOfferCategory;
+      const subcategory = interaction.user.selectedOfferSubcategory;
+
+      // Process quantities
+      const itemsWithQty = selectedItems.map((item, index) => {
+        const qty = parseInt(interaction.fields.getTextInputValue(`offer_qty_${index}`) || '1');
+        return { name: item, quantity: Math.max(1, qty) };
+      });
+
+      // Store in user's session
+      if (!interaction.user.offerTradeItems) {
+        interaction.user.offerTradeItems = [];
+      }
+      interaction.user.offerTradeItems = interaction.user.offerTradeItems.concat(itemsWithQty);
+
+      // Show option to add more categories or proceed
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`offer_continue_select_${messageId}`)
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+          { label: '➕ Add Another Category', value: 'add_category' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.offerTradeItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
+      return;
     }
   }
 
@@ -643,7 +907,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const hostItems = interaction.user.tradeItems || [];
       delete interaction.user.tradeItems;
-      delete interaction.user.tradeCategory;
+      delete interaction.user.selectedTradeItems;
+      delete interaction.user.selectedTradeCategory;
+      delete interaction.user.selectedTradeSubcategory;
 
       // Create trade embed
       const embed = new EmbedBuilder()
@@ -653,7 +919,14 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: 'Version 1.0.6 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      const hostItemsText = hostItems.length > 0 ? hostItems.join('\n') : 'None';
+      // Format host items with quantities
+      let hostItemsText = 'None';
+      if (hostItems.length > 0) {
+        hostItemsText = hostItems.map(item => 
+          typeof item === 'object' ? `${item.name} x${item.quantity}` : item
+        ).join('\n');
+      }
+      
       embed.addFields({
         name: `Host Items${diamonds > 0 ? ` + ${diamonds} 💎` : ''}`,
         value: hostItemsText || 'None',
@@ -683,7 +956,7 @@ client.on('interactionCreate', async (interaction) => {
 
       trades.set(message.id, trade);
 
-      await interaction.reply({ content: `Trade offer created! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, ephemeral: true });
+      await interaction.reply({ content: `Trade offer created! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
       return;
     }
 
@@ -701,7 +974,7 @@ client.on('interactionCreate', async (interaction) => {
       delete interaction.user.messageId;
 
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', ephemeral: true });
+      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
 
       // Add offer to trade
       trade.offers.push({
@@ -714,7 +987,7 @@ client.on('interactionCreate', async (interaction) => {
       // Update trade embed to show grid layout
       await updateTradeEmbed(interaction.guild, trade, messageId);
 
-      await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, ephemeral: true });
+      await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
       return;
     }
 
@@ -857,7 +1130,9 @@ async function updateTradeEmbed(guild, trade, messageId) {
       embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** ${trade.host}`);
     }
 
-    const hostItemsText = trade.hostItems.length > 0 ? trade.hostItems.join('\n') : 'None';
+    const hostItemsText = trade.hostItems.length > 0 ? trade.hostItems.map(item => 
+      typeof item === 'object' ? `${item.name} x${item.quantity}` : item
+    ).join('\n') : 'None';
     embed.addFields({
       name: `Host${trade.hostDiamonds > 0 ? ` (+ ${trade.hostDiamonds} 💎)` : ''}`,
       value: hostItemsText || 'None',
@@ -866,7 +1141,9 @@ async function updateTradeEmbed(guild, trade, messageId) {
 
     if (trade.offers.length > 0 && !trade.accepted) {
       const lastOffer = trade.offers[trade.offers.length - 1];
-      const guestItemsText = lastOffer.items.length > 0 ? lastOffer.items.join('\n') : 'None';
+      const guestItemsText = lastOffer.items.length > 0 ? lastOffer.items.map(item => 
+        typeof item === 'object' ? `${item.name} x${item.quantity}` : item
+      ).join('\n') : 'None';
       embed.addFields({
         name: `${lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${lastOffer.diamonds} 💎)` : ''}`,
         value: guestItemsText || 'None',
@@ -875,7 +1152,9 @@ async function updateTradeEmbed(guild, trade, messageId) {
     } else if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
-        const guestItemsText = acceptedOffer.items.length > 0 ? acceptedOffer.items.join('\n') : 'None';
+        const guestItemsText = acceptedOffer.items.length > 0 ? acceptedOffer.items.map(item => 
+          typeof item === 'object' ? `${item.name} x${item.quantity}` : item
+        ).join('\n') : 'None';
         embed.addFields({
           name: `${acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${acceptedOffer.diamonds} 💎)` : ''}`,
           value: guestItemsText || 'None',
