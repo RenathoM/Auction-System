@@ -15,16 +15,19 @@ const trades = new Map(); // messageId -> { host, hostDiamonds, hostItems, offer
 const inventories = new Map(); // userId -> { messageId, channelId, items, diamonds, lookingFor, robloxUsername, lastEdited }
 const userTradeCount = new Map(); // userId -> count of active trades
 
+// Maximum diamonds allowed (1 billion)
+const MAX_DIAMONDS = 1000000000;
+
 // Item categories for trades
 const itemCategories = {
   huges: {
-    'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeGoldenBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
-    'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeGoldenSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeGoldenSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
-    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi [🖼️](https://images-ext-1.discordapp.net/external/HvWsPikYqJ5AEgVw19yi6CIsKU38v0uyNsf2hbx1Ges/https/tr.rbxcdn.com/180DAY-69d0a717c564ff2d49f36bd6e2feb533/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
-    'Jelly Huges': ['HugeJellyDragon', 'HugeGoldenJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeGoldenJellyKitsune', 'HugeRainbowJellyKitsune'],
-    'Blazing Huges': ['HugeBlazingShark', 'HugeGoldenBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeGoldenBlazingBat', 'HugeRainbowBlazingBat'],
+    'Black Hole Huges': ['HugeBlackHoleAngelus [🖼️](https://media.discordapp.net/attachments/1360126876437184674/1461849614092341420/HugeBackHoleAngelus.png?ex=696c0d0b&is=696abb8b&hm=96e3b0e547d51d8ec551326376a1bbaec39c821f3ce85b9fea8be1a4a40849dc&=&format=webp&quality=lossless&width=350&height=350)', 'HugeRainbowBlackHoleAngelus'],
+    'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
+    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi [🖼️](https://images-ext-1.discordapp.net/external/HvWsPikYqJ5AEgVw19yi6CIsKU38v0uyNsf2hbx1Ges/https/tr.rbxcdn.com/180DAY-69d0a717c564ff2d49f36bd6e2feb533/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
+    'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
+    'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon [🖼️](https://images-ext-1.discordapp.net/external/2jlGiikwNCiH4arrzE6DV-foWRW0SKfVvYNRD6sC6XM/https/tr.rbxcdn.com/180DAY-2eaf5436e3317efe09502f4c66031476/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPartyDragon [🖼️](https://images-ext-1.discordapp.net/external/TYyqb24G6ixiRY1MfE-HkeMMHyHRe8Y48u4PKZnq5Rc/https/tr.rbxcdn.com/180DAY-0f849ecd01a44485e9a7886e46bdaf49/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeFantasyChest', 'HugeGoldenFantasyChest', 'HugeRainbowFantasyChest'],
-    'Christmas.1 Huges': ['HugePresentChestMimic [🖼️](https://images-ext-1.discordapp.net/external/tylnJovsFHUeih_PmQPj1deoM-Rvk5HNniKZpBWRtLk/https/tr.rbxcdn.com/180DAY-a534a9bb98b6ad0ed29a4fa223ff9863/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/79VSFtB1mNrv-rsAB1MXXs2AhD06lvelkJL4vmOUkkk/https/tr.rbxcdn.com/180DAY-abd00d533241d387235e881714af1101/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/ef6b9f8ITyO6f5g7FXaH7xzVB56N9k3ZaFXAVy9WAs8/https/tr.rbxcdn.com/180DAY-ef01fde248024709d54d109f8b29a53b/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/_-6k9NMSot1joxpklz1Bm8obV0KXcrtDU0rzAc1aNbg/https/tr.rbxcdn.com/180DAY-20005c7c5848751df92ec3bb0e7a91cb/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/Xjpq3L6ZLHPvlT2FJNS3miRPMATx5yiiaZ32BhAs5sk/https/tr.rbxcdn.com/180DAY-997c4a13a2fbdabebd9b3955ca922311/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNorthPoleWolf'],
+    'Christmas.1 Huges': ['HugePresentChestMimic [🖼️](https://images-ext-1.discordapp.net/external/tylnJovsFHUeih_PmQPj1deoM-Rvk5HNniKZpBWRtLk/https/tr.rbxcdn.com/180DAY-a534a9bb98b6ad0ed29a4fa223ff9863/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/79VSFtB1mNrv-rsAB1MXXs2AhD06lvelkJL4vmOUkkk/https/tr.rbxcdn.com/180DAY-abd00d533241d387235e881714af1101/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenGingerbreadAngelus [🖼️](https://images-ext-1.discordapp.net/external/ef6b9f8ITyO6f5g7FXaH7xzVB56N9k3ZaFXAVy9WAs8/https/tr.rbxcdn.com/180DAY-ef01fde248024709d54d109f8b29a53b/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/_-6k9NMSot1joxpklz1Bm8obV0KXcrtDU0rzAc1aNbg/https/tr.rbxcdn.com/180DAY-20005c7c5848751df92ec3bb0e7a91cb/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNorthPoleWolf [🖼️](https://images-ext-1.discordapp.net/external/Xjpq3L6ZLHPvlT2FJNS3miRPMATx5yiiaZ32BhAs5sk/https/tr.rbxcdn.com/180DAY-997c4a13a2fbdabebd9b3955ca922311/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix [🖼️](https://images-ext-1.discordapp.net/external/QFHWkhCiDlSDXkyOVI4SaU9sfSmkJfoFUkaesfqElBY/https/tr.rbxcdn.com/180DAY-30a9f50c6792de697ae1eee492e4056b/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
     'Map Huges': ['HugeChestMimic [🖼️](https://media.discordapp.net/attachments/1360126876437184674/1460323205695668295/HugeAtlas.png?ex=696bc577&is=696a73f7&hm=a07217d6e2be8b1b38e0e043b773e4b114f7ead33ed64b00e6bad1bc4632b1a1&=&format=webp&quality=lossless)', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat [🖼️](https://images-ext-1.discordapp.net/external/W5ThinBk1pmkW-tSv1VJL2a5G9MRBHqBQ3Ef96yD27E/https/tr.rbxcdn.com/180DAY-ecd39d21270ffc2f87860a97427e58cc/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat [🖼️](https://images-ext-1.discordapp.net/external/CR1WbXWYBFEj-USo2uJ34ZSqcANVN8B3ZkPWUPeYAcs/https/tr.rbxcdn.com/180DAY-04ef9a54a9294f73d96a7781b9ab7b03/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus [🖼️](https://images-ext-1.discordapp.net/external/rsis_A9y0JkPXqrRuoiAG4FZldwIQ_JAoQIsf1SoiIM/https/tr.rbxcdn.com/180DAY-a256fe5e47dd36c379de63f4756c853f/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenDominusAzureus [🖼️](https://images-ext-1.discordapp.net/external/Xaj1oEQQ0Dy569KN2WUsBcH_YdKjv6GuDbpcbYmdwGg/https/tr.rbxcdn.com/180DAY-da92f129bc84d45f87ecba5cc3fb0fd5/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowDominusAzureus', 'HugeNinjaCat [🖼️](https://images-ext-1.discordapp.net/external/mbWK9xEgBtPPRQ1TnCCv1mC6ZVe0lLZ5i_lcA6S_WZo/https/tr.rbxcdn.com/180DAY-d166867b83307aa63489560abe0929b5/420/420/Image/Png/noFilter?format=webp)', 'HugeGoldenNinjaCat [🖼️](https://images-ext-1.discordapp.net/external/mbMN8U-FUpPkDjtjTT8eLJRq4X9ZU-O1VxPUQ6g7kJ4/https/tr.rbxcdn.com/180DAY-b3831774ef2ed55a1c3bd062a264ff8a/420/420/Image/Png/noFilter?format=webp)', 'HugeRainbowNinjaCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
   },
@@ -169,6 +172,11 @@ client.on('messageCreate', async (message) => {
   const bidRegex = /bid (\d+(?:,\d{3})*|\d+K?)(?:\s+and (.+))?/i;
   const match = message.content.match(bidRegex);
   if (match) {
+    // Check if bidder is the host
+    if (message.author.id === auction.host.id) {
+      return message.reply('You cannot bid on your own auction.');
+    }
+
     const diamondsStr = match[1];
     const items = match[2] || '';
     const diamonds = parseBid(diamondsStr);
@@ -463,7 +471,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Trade System Setup')
         .setDescription('Welcome to the live trade system!\n\n**How it works:**\n- Create a trade offer with items or diamonds.\n- Other users can place their offers in response.\n- Host can accept or decline offers.\n- Once accepted, both users are notified.\n\nClick the button below to create a new trade.')
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.1 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -696,6 +704,11 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'trade_offer_button') {
       const trade = trades.get(interaction.message.id);
       if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
+
+      // Check if user is the host
+      if (interaction.user.id === trade.host.id) {
+        return interaction.reply({ content: 'You cannot make an offer on your own trade.', flags: 64 });
+      }
 
       // Show category selection for offer
       const { StringSelectMenuBuilder } = require('discord.js');
@@ -1370,6 +1383,8 @@ client.on('interactionCreate', async (interaction) => {
       const diamondsStr = interaction.fields.getTextInputValue('inv_diamonds_amount');
       const diamonds = parseBid(diamondsStr);
 
+      if (diamonds > MAX_DIAMONDS) return interaction.reply({ content: `Maximum diamonds allowed is ${formatBid(MAX_DIAMONDS)} 💎.`, ephemeral: true });
+
       if (!interaction.user.inventoryItems) {
         interaction.user.inventoryItems = [];
       }
@@ -1759,6 +1774,8 @@ client.on('interactionCreate', async (interaction) => {
         diamonds = parseBid(diamondsStr);
       }
 
+      if (diamonds > MAX_DIAMONDS) return interaction.reply({ content: `Maximum diamonds allowed is ${formatBid(MAX_DIAMONDS)} 💎.`, flags: 64 });
+
       const hostItems = interaction.user.tradeItems || [];
       delete interaction.user.tradeItems;
       delete interaction.user.selectedTradeItems;
@@ -1838,6 +1855,8 @@ client.on('interactionCreate', async (interaction) => {
         delete interaction.user.offerDiamonds;
       }
 
+      if (diamonds > MAX_DIAMONDS) return interaction.reply({ content: `Maximum diamonds allowed is ${formatBid(MAX_DIAMONDS)} 💎.`, flags: 64 });
+
       const offerItems = interaction.user.offerItems || [];
       delete interaction.user.offerItems;
       delete interaction.user.messageId;
@@ -1872,6 +1891,11 @@ client.on('interactionCreate', async (interaction) => {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running.', ephemeral: true });
 
+      // Check if bidder is the host
+      if (interaction.user.id === auction.host.id) {
+        return interaction.reply({ content: 'You cannot bid on your own auction.', ephemeral: true });
+      }
+
       const diamondsStr = interaction.fields.getTextInputValue('diamonds');
       const items = interaction.fields.getTextInputValue('items') || '';
 
@@ -1879,6 +1903,8 @@ client.on('interactionCreate', async (interaction) => {
       if (diamondsStr) {
         diamonds = parseBid(diamondsStr);
       }
+
+      if (diamonds > MAX_DIAMONDS) return interaction.reply({ content: `Maximum diamonds allowed is ${formatBid(MAX_DIAMONDS)} 💎.`, ephemeral: true });
 
       if (auction.model === 'items' && diamonds > 0) return interaction.reply({ content: 'This auction is offers only.', ephemeral: true });
       if (auction.model === 'diamonds' && items) return interaction.reply({ content: 'This auction is diamonds only.', ephemeral: true });
@@ -1903,6 +1929,7 @@ client.on('interactionCreate', async (interaction) => {
       const time = 60; // Fixed to 60 seconds
       const startingPrice = parseBid(startingPriceStr);
       if (isNaN(startingPrice) || startingPrice < 0) return interaction.reply({ content: 'Invalid starting price.', ephemeral: true });
+      if (startingPrice > MAX_DIAMONDS) return interaction.reply({ content: `Maximum diamonds allowed is ${formatBid(MAX_DIAMONDS)} 💎.`, ephemeral: true });
 
       if (auctions.size > 0) {
         return interaction.reply({ content: 'An auction is already running in the server. Please wait for it to end.', ephemeral: true });
@@ -2065,6 +2092,13 @@ async function updateTradeEmbed(guild, trade, messageId) {
         .setStyle(ButtonStyle.Danger);
 
       components.push(new ActionRowBuilder().addComponents(offerButton, deleteButton));
+    } else if (trade.accepted) {
+      const deleteButton = new ButtonBuilder()
+        .setCustomId(`trade_delete_${Date.now()}`)
+        .setLabel('Delete')
+        .setStyle(ButtonStyle.Danger);
+
+      components.push(new ActionRowBuilder().addComponents(deleteButton));
     }
 
     await message.edit({ embeds: [embed], components });
