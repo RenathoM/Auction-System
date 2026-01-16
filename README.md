@@ -6,7 +6,7 @@ A Discord bot for live auctions with support for bidding using diamonds (💎) a
 
 - Live auctions per channel to avoid conflicts
 - Flexible auction models: diamonds only, items only, or both
-- Text-based bid parsing (e.g., "I'll bid 10,000" or "10K")
+- Text-based bid parsing (e.g., "bid 10,000" or "10K")
 - Slash commands and interactive UI for bidding
 - Administrative controls for hosts
 - Time-based auction ending with "sold" announcement

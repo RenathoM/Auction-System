@@ -6,7 +6,9 @@ const config = require('./config.json');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId }
+let pinAllAuctions = false;
+
+const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId, updateInterval }
 
 client.once('ready', async () => {
   console.log('Auction Bot is ready!');
@@ -54,17 +56,9 @@ client.once('ready', async () => {
       ]
     },
     {
-      name: 'restartauction',
-      description: 'Restart an auction (admin only)',
-      options: [
-        {
-          name: 'messageid',
-          type: ApplicationCommandOptionType.String,
-          description: 'The message ID of the auction',
-          required: true
-        }
-      ]
-    }
+      name: 'pinallauctions',
+      description: 'Toggle pinning of all future auctions (admin only)'
+    },
   ];
 
   await client.application.commands.set(commands);
@@ -77,7 +71,7 @@ client.on('messageCreate', async (message) => {
   if (!auction) return;
 
   // Parse bid messages
-  const bidRegex = /I'll bid (\d+(?:,\d{3})*|\d+K?)(?:\s+and (.+))?/i;
+  const bidRegex = /bid (\d+(?:,\d{3})*|\d+K?)(?:\s+and (.+))?/i;
   const match = message.content.match(bidRegex);
   if (match) {
     const diamondsStr = match[1];
@@ -108,7 +102,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'setup') {
       const embed = new EmbedBuilder()
         .setTitle('Auction System Setup')
-        .setDescription('Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "I\'ll bid 10,000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.')
+        .setDescription('Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "bid 10000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.')
         .setColor(0x00ff00);
 
       const row = new ActionRowBuilder()
@@ -119,7 +113,7 @@ client.on('interactionCreate', async (interaction) => {
             .setStyle(ButtonStyle.Primary)
         );
 
-      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      await interaction.reply({ embeds: [embed], components: [row] });
     }
 
     if (commandName === 'bid') {
@@ -201,6 +195,7 @@ client.on('interactionCreate', async (interaction) => {
       if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
 
       clearTimeout(auction.timer);
+      clearInterval(auction.updateInterval);
       await endAuction(interaction.guild.channels.cache.get(auction.channelId));
       interaction.reply({ content: 'Auction ended.', ephemeral: true });
     }
@@ -212,11 +207,38 @@ client.on('interactionCreate', async (interaction) => {
       if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
 
       clearTimeout(auction.timer);
+      clearInterval(auction.updateInterval);
       auction.started = new Date();
       auction.timer = setTimeout(async () => {
+        clearInterval(auction.updateInterval);
         await endAuction(interaction.guild.channels.cache.get(auction.channelId));
       }, auction.time * 1000);
+      // Restart update interval
+      auction.updateInterval = setInterval(async () => {
+        const remaining = Math.max(0, Math.ceil((auction.started.getTime() + auction.time * 1000 - Date.now()) / 1000));
+        if (remaining <= 0) {
+          clearInterval(auction.updateInterval);
+          return;
+        }
+        const updatedEmbed = new EmbedBuilder()
+          .setTitle(auction.title)
+          .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${auction.startingPrice} 💎\n**Time Remaining:** ${remaining}s`)
+          .setColor(0x00ff00);
+        try {
+          const channel = interaction.guild.channels.cache.get(auction.channelId);
+          const message = await channel.messages.fetch(auction.messageId);
+          await message.edit({ embeds: [updatedEmbed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('bid_button').setLabel('Bid').setStyle(ButtonStyle.Primary))] });
+        } catch (e) {
+          // ignore
+        }
+      }, 1000);
       interaction.reply({ content: 'Auction restarted.', ephemeral: true });
+    }
+
+    if (commandName === 'pinallauctions') {
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+      pinAllAuctions = !pinAllAuctions;
+      interaction.reply({ content: `Pinning of all auctions is now ${pinAllAuctions ? 'enabled' : 'disabled'}.`, ephemeral: true });
     }
   }
 
@@ -351,7 +373,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const embed = new EmbedBuilder()
         .setTitle(title)
-        .setDescription(`${description}\n\n**Model:** ${model}\n**Starting Price:** ${startingPrice} 💎\n**Time:** ${time} seconds`)
+        .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${startingPrice} 💎\n**Time Remaining:** ${time}s`)
         .setColor(0x00ff00);
 
       const row = new ActionRowBuilder()
@@ -368,8 +390,36 @@ client.on('interactionCreate', async (interaction) => {
 
       // Start timer
       auction.timer = setTimeout(async () => {
+        clearInterval(auction.updateInterval);
         await endAuction(interaction.channel);
       }, time * 1000);
+
+      // Update embed every second
+      auction.updateInterval = setInterval(async () => {
+        const remaining = Math.max(0, Math.ceil((auction.started.getTime() + auction.time * 1000 - Date.now()) / 1000));
+        if (remaining <= 0) {
+          clearInterval(auction.updateInterval);
+          return;
+        }
+        const updatedEmbed = new EmbedBuilder()
+          .setTitle(auction.title)
+          .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${auction.startingPrice} 💎\n**Time Remaining:** ${remaining}s`)
+          .setColor(0x00ff00);
+        try {
+          await message.edit({ embeds: [updatedEmbed], components: [row] });
+        } catch (e) {
+          // ignore if message deleted
+        }
+      }, 1000);
+
+      // Pin if enabled
+      if (pinAllAuctions) {
+        try {
+          await message.pin();
+        } catch (e) {
+          // ignore pin errors
+        }
+      }
     }
   }
 });
@@ -378,6 +428,8 @@ async function endAuction(channel) {
   const auction = auctions.get(channel.id);
   if (!auction) return;
 
+  clearTimeout(auction.timer);
+  clearInterval(auction.updateInterval);
   auctions.delete(channel.id);
 
   if (auction.bids.length === 0) {
