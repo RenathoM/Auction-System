@@ -10,6 +10,10 @@ let redirectChannelId = null;
 let redirectTradeChannelId = null;
 let redirectInventoryChannelId = null;
 
+// Image upload channels
+const TRADE_IMAGES_CHANNEL = '1461849745566990487';
+const AUCTION_IMAGES_CHANNEL = '1461849894615646309';
+
 const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId, updateInterval, notificationMessageId }
 const trades = new Map(); // messageId -> { host, hostDiamonds, hostItems, offers: [{user, diamonds, items, timestamp}], channelId, messageId, accepted: false, acceptedUser: null, notificationMessages: [] }
 const inventories = new Map(); // userId -> { messageId, channelId, items, diamonds, lookingFor, robloxUsername, lastEdited }
@@ -858,6 +862,69 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Auction deleted!', ephemeral: true });
     }
 
+    if (interaction.customId.startsWith('auction_upload_image_')) {
+      // Find the auction by the message
+      let auction = null;
+
+      for (const [channelId, a] of auctions) {
+        if (a.finalMessageId === interaction.message.id) {
+          auction = a;
+          break;
+        }
+      }
+
+      if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
+      
+      // Check if user is the winner
+      if (interaction.user.id !== auction.winnerId) {
+        return interaction.reply({ content: `Only the winner (${auction.winnerUser}) can upload an image for this auction.`, ephemeral: true });
+      }
+
+      // Show file upload dialog
+      const modal = new ModalBuilder()
+        .setCustomId(`auction_image_upload_modal_${interaction.message.id}`)
+        .setTitle('Upload Auction Image');
+
+      const input = new TextInputBuilder()
+        .setCustomId('image_url')
+        .setLabel('Paste image URL or describe the image')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('https://... or paste image details')
+        .setRequired(true);
+
+      const row = new ActionRowBuilder().addComponents(input);
+      modal.addComponents(row);
+      
+      await interaction.showModal(modal);
+    }
+
+    if (interaction.customId.startsWith('trade_upload_image_')) {
+      const trade = trades.get(interaction.message.id);
+      if (!trade) return interaction.reply({ content: 'Trade not found.', ephemeral: true });
+
+      // Check if user is the host or the accepted guest
+      if (interaction.user.id !== trade.host.id && interaction.user.id !== trade.acceptedUser.id) {
+        return interaction.reply({ content: `Only the host (${trade.host}) or guest (${trade.acceptedUser}) can upload an image for this trade.`, ephemeral: true });
+      }
+
+      // Show file upload dialog
+      const modal = new ModalBuilder()
+        .setCustomId(`trade_image_upload_modal_${interaction.message.id}`)
+        .setTitle('Upload Trade Image');
+
+      const input = new TextInputBuilder()
+        .setCustomId('image_url')
+        .setLabel('Paste image URL or describe the image')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('https://... or paste image details')
+        .setRequired(true);
+
+      const row = new ActionRowBuilder().addComponents(input);
+      modal.addComponents(row);
+      
+      await interaction.showModal(modal);
+    }
+
     if (interaction.customId === 'inventory_update_button') {
       // Load previous inventory items
       const previousInventory = inventories.get(interaction.user.id);
@@ -1377,6 +1444,75 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith('auction_image_upload_modal_')) {
+      const messageId = interaction.customId.replace('auction_image_upload_modal_', '');
+      const imageUrl = interaction.fields.getTextInputValue('image_url');
+
+      // Find the auction
+      let auction = null;
+      for (const [channelId, a] of auctions) {
+        if (a.finalMessageId === messageId) {
+          auction = a;
+          break;
+        }
+      }
+
+      if (!auction) return interaction.reply({ content: 'Auction not found.', ephemeral: true });
+
+      // Check if user is the winner
+      if (interaction.user.id !== auction.winnerId) {
+        return interaction.reply({ content: 'Only the winner can upload this image.', ephemeral: true });
+      }
+
+      // Send to auction images channel
+      try {
+        const imagesChannel = await interaction.guild.channels.fetch(AUCTION_IMAGES_CHANNEL);
+        if (!imagesChannel) return interaction.reply({ content: 'Images channel not found.', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+          .setTitle(`Auction Image - ${auction.title}`)
+          .setDescription(`**Auction Winner:** ${auction.winnerUser}\n**Bid:** ${formatBid(auction.bids[0].diamonds)} 💎\n\n${imageUrl}`)
+          .setColor(0xff0000)
+          .setFooter({ text: `Uploaded by ${interaction.user.username}` });
+
+        await imagesChannel.send({ embeds: [embed] });
+        await interaction.reply({ content: '✅ Image uploaded successfully!', ephemeral: true });
+      } catch (e) {
+        console.error('Error uploading auction image:', e);
+        await interaction.reply({ content: 'Failed to upload image. Please try again.', ephemeral: true });
+      }
+    }
+
+    if (interaction.customId.startsWith('trade_image_upload_modal_')) {
+      const messageId = interaction.customId.replace('trade_image_upload_modal_', '');
+      const imageUrl = interaction.fields.getTextInputValue('image_url');
+
+      // Find the trade
+      const trade = trades.get(messageId);
+      if (!trade) return interaction.reply({ content: 'Trade not found.', ephemeral: true });
+
+      // Check if user is the host or accepted guest
+      if (interaction.user.id !== trade.host.id && interaction.user.id !== trade.acceptedUser.id) {
+        return interaction.reply({ content: 'Only the host or guest can upload this image.', ephemeral: true });
+      }
+
+      // Send to trade images channel
+      try {
+        const imagesChannel = await interaction.guild.channels.fetch(TRADE_IMAGES_CHANNEL);
+        if (!imagesChannel) return interaction.reply({ content: 'Images channel not found.', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+          .setTitle('Trade Image')
+          .setDescription(`**Host:** ${trade.host}\n**Guest:** ${trade.acceptedUser}\n\n${imageUrl}`)
+          .setColor(0x00ff00)
+          .setFooter({ text: `Uploaded by ${interaction.user.username}` });
+
+        await imagesChannel.send({ embeds: [embed] });
+        await interaction.reply({ content: '✅ Image uploaded successfully!', ephemeral: true });
+      } catch (e) {
+        console.error('Error uploading trade image:', e);
+        await interaction.reply({ content: 'Failed to upload image. Please try again.', ephemeral: true });
+      }
     }
 
     if (interaction.customId === 'inventory_diamonds_modal') {
@@ -2093,12 +2229,17 @@ async function updateTradeEmbed(guild, trade, messageId) {
 
       components.push(new ActionRowBuilder().addComponents(offerButton, deleteButton));
     } else if (trade.accepted) {
+      const uploadImageButton = new ButtonBuilder()
+        .setCustomId(`trade_upload_image_${Date.now()}`)
+        .setLabel('Upload Proof Image')
+        .setStyle(ButtonStyle.Primary);
+
       const deleteButton = new ButtonBuilder()
         .setCustomId(`trade_delete_${Date.now()}`)
         .setLabel('Delete')
         .setStyle(ButtonStyle.Danger);
 
-      components.push(new ActionRowBuilder().addComponents(deleteButton));
+      components.push(new ActionRowBuilder().addComponents(uploadImageButton, deleteButton));
     }
 
     await message.edit({ embeds: [embed], components });
@@ -2139,19 +2280,26 @@ async function endAuction(channel) {
     .setDescription(`**Title:** ${auction.title}\n**Winner:** ${winner.user}\n**Bid:** ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}`)
     .setColor(0xff0000);
 
-  // Add delete button for host
+  // Add buttons
   const deleteButton = new ButtonBuilder()
     .setCustomId(`auction_delete_final_${Date.now()}`)
     .setLabel('Delete Auction')
     .setStyle(ButtonStyle.Danger);
+
+  const uploadImageButton = new ButtonBuilder()
+    .setCustomId(`auction_upload_image_${Date.now()}`)
+    .setLabel('Upload Proof Image')
+    .setStyle(ButtonStyle.Primary);
   
-  const row = new ActionRowBuilder().addComponents(deleteButton);
+  const row = new ActionRowBuilder().addComponents(uploadImageButton, deleteButton);
 
   const msg = await channel.send({ embeds: [embed], components: [row] });
   
-  // Store auction data for the delete button
+  // Store auction data for the buttons
   auction.finalMessageId = msg.id;
   auction.hostId = auction.host.id;
+  auction.winnerId = winner.user.id;
+  auction.winnerUser = winner.user;
   auctions.set(channel.id, auction);
 }
 
