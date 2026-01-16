@@ -511,21 +511,22 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'setupinventory') {
-      // Show category selection for inventory
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const categorySelect = new StringSelectMenuBuilder()
-        .setCustomId('inventory_category_select')
-        .setPlaceholder('Select an item category')
-        .addOptions([
-          { label: 'Huges', value: 'huges', emoji: '🔥' },
-          { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
-          { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
-        ]);
+      const embed = new EmbedBuilder()
+        .setTitle('📦 Inventory System Setup')
+        .setDescription('Welcome to the inventory system!\n\n**How it works:**\n- Create your personal inventory with items you have in stock.\n- Set your diamond amount and describe what you\'re looking for.\n- Optionally add your Roblox username to display your avatar.\n- Other users can see your inventory and make offers!\n- Update anytime - your previous items stay saved if you don\'t remove them.\n\nClick the button below to create or edit your inventory.')
+        .setColor(0x00a8ff)
+        .setFooter({ text: 'Version 1.0.8 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      const row = new ActionRowBuilder().addComponents(categorySelect);
-      await interaction.reply({ content: 'Select an item category to add to your inventory:', components: [row], ephemeral: true });
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('create_inventory')
+            .setLabel('Create Inventory')
+            .setStyle(ButtonStyle.Primary)
+        );
+
+      await interaction.reply({ embeds: [embed], components: [row] });
     }
   }
 
@@ -638,11 +639,37 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
       await interaction.reply({ content: 'Select an item category to add to your trade offer:', components: [row], ephemeral: true });
+    }
+
+    if (interaction.customId === 'create_inventory') {
+      // Load previous inventory items if editing
+      const previousInventory = inventories.get(interaction.user.id);
+      if (previousInventory) {
+        interaction.user.inventoryItems = previousInventory.items;
+      }
+
+      // Show category selection
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const categorySelect = new StringSelectMenuBuilder()
+        .setCustomId('inventory_category_select')
+        .setPlaceholder('Select an item category')
+        .addOptions([
+          { label: 'Huges', value: 'huges', emoji: '🔥' },
+          { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+          { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(categorySelect);
+      await interaction.reply({ content: 'Select an item category to add to your inventory:', components: [row], ephemeral: true });
     }
 
     if (interaction.customId === 'trade_offer_button') {
@@ -659,7 +686,8 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -743,6 +771,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'inventory_update_button') {
+      // Load previous inventory items
+      const previousInventory = inventories.get(interaction.user.id);
+      if (previousInventory) {
+        interaction.user.inventoryItems = previousInventory.items;
+      }
+
       // Show category selection for inventory update
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -753,7 +787,8 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -767,7 +802,25 @@ client.on('interactionCreate', async (interaction) => {
       const { StringSelectMenuBuilder } = require('discord.js');
       
       let items = [];
-      if (category === 'huges') {
+      if (category === 'diamonds') {
+        // Show modal for diamonds input
+        const diamondsModal = new ModalBuilder()
+          .setCustomId('trade_diamonds_modal')
+          .setTitle('Add Diamonds');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('diamonds_amount')
+          .setLabel('Amount of Diamonds')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g., 5000, 10K, 1M')
+          .setRequired(true);
+
+        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row1);
+
+        await interaction.showModal(diamondsModal);
+        return;
+      } else if (category === 'huges') {
         // Para huges, mostrar subcategorias
         const subcategorySelect = new StringSelectMenuBuilder()
           .setCustomId('trade_huge_subcategory_select')
@@ -847,7 +900,24 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
       
-      if (category === 'huges') {
+      if (category === 'diamonds') {
+        const diamondsModal = new ModalBuilder()
+          .setCustomId(`offer_diamonds_modal_${messageId}`)
+          .setTitle('Add Diamonds to Offer');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('offer_diamonds_amount')
+          .setLabel('Amount of Diamonds')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g., 5000, 10K, 1M')
+          .setRequired(true);
+
+        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row1);
+
+        await interaction.showModal(diamondsModal);
+        return;
+      } else if (category === 'huges') {
         // Para huges, mostrar subcategorias
         const subcategorySelect = new StringSelectMenuBuilder()
           .setCustomId(`offer_huge_subcategory_select_${messageId}`)
@@ -1079,7 +1149,24 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
       
-      if (category === 'huges') {
+      if (category === 'diamonds') {
+        const diamondsModal = new ModalBuilder()
+          .setCustomId('inventory_diamonds_modal')
+          .setTitle('Add Diamonds');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('inv_diamonds_amount')
+          .setLabel('Amount of Diamonds')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g., 5000, 10K, 1M')
+          .setRequired(true);
+
+        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row1);
+
+        await interaction.showModal(diamondsModal);
+        return;
+      } else if (category === 'huges') {
         const subcategorySelect = new StringSelectMenuBuilder()
           .setCustomId('inventory_huge_subcategory_select')
           .setPlaceholder('Select a Huge subcategory')
@@ -1151,6 +1238,112 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'trade_diamonds_modal') {
+      const diamondsStr = interaction.fields.getTextInputValue('diamonds_amount');
+      const diamonds = parseBid(diamondsStr);
+
+      if (!interaction.user.tradeItems) {
+        interaction.user.tradeItems = [];
+      }
+
+      interaction.user.tradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId('trade_continue_select')
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+          { label: '➕ Add Another Category', value: 'add_category' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.tradeItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
+      return;
+    }
+
+    if (interaction.customId.startsWith('offer_diamonds_modal_')) {
+      const messageId = interaction.customId.replace('offer_diamonds_modal_', '');
+      const diamondsStr = interaction.fields.getTextInputValue('offer_diamonds_amount');
+      const diamonds = parseBid(diamondsStr);
+
+      if (!interaction.user.offerTradeItems) {
+        interaction.user.offerTradeItems = [];
+      }
+
+      interaction.user.offerTradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`offer_continue_select_${messageId}`)
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+          { label: '➕ Add Another Category', value: 'add_category' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.offerTradeItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
+      return;
+    }
+
+    if (interaction.customId === 'inventory_diamonds_modal') {
+      const diamondsStr = interaction.fields.getTextInputValue('inv_diamonds_amount');
+      const diamonds = parseBid(diamondsStr);
+
+      if (!interaction.user.inventoryItems) {
+        interaction.user.inventoryItems = [];
+      }
+
+      interaction.user.inventoryItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`inventory_continue_select`)
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Continue to Next Step', value: 'continue_to_setup' },
+          { label: '➕ Add Another Category', value: 'add_category' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.inventoryItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
+      return;
+    }
+
     if (interaction.customId === 'trade_item_quantities_modal') {
       const selectedItems = interaction.user.selectedTradeItems || [];
       const category = interaction.user.selectedTradeCategory;
