@@ -14,6 +14,7 @@ let redirectGiveawayChannelId = '1462190801198252226';
 
 const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId, updateInterval }
 const finishedAuctions = new Map(); // messageId -> { host, title, winner, diamonds, items, channelId, auctionMessageId }
+const finishedGiveaways = new Map(); // messageId -> { host, winner, items, channelId }
 const trades = new Map(); // messageId -> { host, hostDiamonds, hostItems, offers: [{user, diamonds, items, timestamp}], channelId, messageId, accepted: false, acceptedUser: null }
 const inventories = new Map(); // userId -> { messageId, channelId, items, diamonds, lookingFor, robloxUsername, lastEdited }
 const userTradeCount = new Map(); // userId -> count of active trades
@@ -385,6 +386,31 @@ client.on('messageCreate', async (message) => {
         .setTitle('🎪 Auction Proof')
         .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${auctionData.diamonds} 💎\n\n**Note:** ${proofData.description || 'No description provided'}`)
         .setColor(0x00ff00)
+        .setImage(attachment.url)
+        .setFooter({ text: `Submitted by ${message.author.username}` })
+        .setTimestamp();
+    } else if (proofData.type === 'giveaway') {
+      const giveawayProofChannelId = '1462197194646880368';
+      proofChannel = guild.channels.cache.get(giveawayProofChannelId);
+
+      if (!proofChannel) {
+        delete message.author.waitingForProof;
+        return message.reply('❌ Giveaway proof channel not found.');
+      }
+
+      // Get giveaway info from finishedGiveaways Map
+      const giveawayData = finishedGiveaways.get(proofData.giveawayProofMessageId);
+      
+      if (!giveawayData) {
+        delete message.author.waitingForProof;
+        return message.reply('❌ Giveaway no longer exists.');
+      }
+
+      // Create proof embed for giveaway
+      proofEmbed = new EmbedBuilder()
+        .setTitle('🎁 Giveaway Proof')
+        .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setColor(0xFF1493)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.username}` })
         .setTimestamp();
@@ -1275,8 +1301,25 @@ client.on('interactionCreate', async (interaction) => {
         inline: true
       });
 
+      // Add Upload Proof Image button
+      const proofButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_giveaway_${Date.now()}`)
+        .setLabel('Upload Proof Image')
+        .setStyle(ButtonStyle.Primary);
+
+      const row = new ActionRowBuilder().addComponents(proofButton);
+
       const channel = interaction.guild.channels.cache.get(giveaway.channelId);
-      await channel.send({ embeds: [embed] });
+      const proofMessage = await channel.send({ embeds: [embed], components: [row] });
+
+      // Store finished giveaway data for proof handler
+      finishedGiveaways.set(proofMessage.id, {
+        host: giveaway.host,
+        winner: winner.user,
+        items: giveaway.items,
+        channelId: giveaway.channelId,
+        giveawayChannelId: '1462197194646880368'
+      });
 
       // Notify winner
       await channel.send(`🎉 Congratulations ${winner.user}! You won the giveaway!`);
@@ -1576,6 +1619,35 @@ client.on('interactionCreate', async (interaction) => {
         .setLabel('Description (optional)')
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder('Add any notes about this auction...')
+        .setRequired(false);
+
+      const row = new ActionRowBuilder().addComponents(descriptionInput);
+      modal.addComponents(row);
+
+      await interaction.showModal(modal);
+    }
+
+    if (interaction.customId.startsWith('upload_proof_giveaway_')) {
+      // Get giveaway data
+      const messageId = interaction.message.id;
+      const giveawayData = finishedGiveaways.get(messageId);
+      if (!giveawayData) return interaction.reply({ content: 'Giveaway not found.', ephemeral: true });
+
+      // Check if user is host or winner
+      if (giveawayData.host.id !== interaction.user.id && giveawayData.winner.id !== interaction.user.id) {
+        return interaction.reply({ content: 'Only the host or winner can upload proof.', ephemeral: true });
+      }
+
+      // Show modal for image description
+      const modal = new ModalBuilder()
+        .setCustomId('proof_image_modal_giveaway')
+        .setTitle('Upload Proof Image');
+
+      const descriptionInput = new TextInputBuilder()
+        .setCustomId('proof_description')
+        .setLabel('Description (optional)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Add any notes about this giveaway...')
         .setRequired(false);
 
       const row = new ActionRowBuilder().addComponents(descriptionInput);
@@ -3348,6 +3420,23 @@ client.on('interactionCreate', async (interaction) => {
         auctionProofMessageId: interaction.message?.id || null,
         description: description,
         type: 'auction'
+      };
+    }
+
+    if (interaction.customId === 'proof_image_modal_giveaway') {
+      const description = interaction.fields.getTextInputValue('proof_description') || '';
+
+      // Show instruction
+      await interaction.reply({
+        content: '📸 Please attach the proof image to your next message in this channel.\n\nAfter you send the image, the proof will be automatically forwarded to the records channel.',
+        ephemeral: false
+      });
+
+      // Store waiting state
+      interaction.user.waitingForProof = {
+        giveawayProofMessageId: interaction.message?.id || null,
+        description: description,
+        type: 'giveaway'
       };
     }
 
