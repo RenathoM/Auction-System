@@ -2983,6 +2983,14 @@ client.on('interactionCreate', async (interaction) => {
         inline: false
       });
 
+      // Calculate duration text for the reply message
+      const durationHours = Math.floor(duration / 60);
+      const durationMins = duration % 60;
+      let durationText = '';
+      if (durationHours > 0) durationText += `${durationHours}h `;
+      if (durationMins > 0) durationText += `${durationMins}m`;
+      if (!durationText) durationText = duration + 'm';
+
       const enterButton = new ButtonBuilder()
         .setCustomId(`giveaway_enter_${Date.now()}`)
         .setLabel('Enter Giveaway')
