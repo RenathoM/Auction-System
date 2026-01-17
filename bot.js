@@ -543,30 +543,32 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ ephemeral: true });
 
         const versionFile = require('./version.json');
-        const currentVersion = versionFile.version || '1.0.9';
 
-        // Define embeds to update
+        // Define embeds to update with their respective version keys
         const categoriesToUpdate = [
           {
             title: 'Auction System Setup',
             color: 0x00ff00,
             description: 'Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "bid 10000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.',
             customId: 'create_auction',
-            buttonLabel: 'Create Auction'
+            buttonLabel: 'Create Auction',
+            versionKey: 'auction'
           },
           {
             title: 'Trade System Setup',
             color: 0x0099ff,
             description: 'Welcome to the live trade system!\n\n**How it works:**\n- Create a trade offer with items or diamonds.\n- Other users can place their offers in response.\n- Host can accept or decline offers.\n- Once accepted, both users are notified.\n\nClick the button below to create a new trade.',
             customId: 'create_trade',
-            buttonLabel: 'Create Trade'
+            buttonLabel: 'Create Trade',
+            versionKey: 'trade'
           },
           {
             title: '📦 Inventory System Setup',
             color: 0x00a8ff,
             description: 'Welcome to the inventory system!\n\n**How it works:**\n- Create your personal inventory with items you have in stock.\n- Set your diamond amount and describe what you\'re looking for.\n- Optionally add your Roblox username to display your avatar.\n- Other users can see your inventory and make offers!\n- Update anytime - your previous items stay saved if you don\'t remove them.\n\nClick the button below to create or edit your inventory.',
             customId: 'create_inventory',
-            buttonLabel: 'Create Inventory'
+            buttonLabel: 'Create Inventory',
+            versionKey: 'inventory'
           }
         ];
 
@@ -575,6 +577,9 @@ client.on('interactionCreate', async (interaction) => {
 
         for (const category of categoriesToUpdate) {
           try {
+            // Get version from version.json for this category
+            const version = versionFile[category.versionKey] || '1.0.0';
+
             // Search for messages with this embed title in all channels
             const channels = interaction.guild.channels.cache.filter(c => c.isTextBased());
             
@@ -591,7 +596,7 @@ client.on('interactionCreate', async (interaction) => {
                         .setTitle(category.title)
                         .setDescription(category.description)
                         .setColor(category.color)
-                        .setFooter({ text: `Version ${currentVersion} | Made By Atlas` })
+                        .setFooter({ text: `Version ${version} | Made By Atlas` })
                         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
                       const row = new ActionRowBuilder()
@@ -620,9 +625,9 @@ client.on('interactionCreate', async (interaction) => {
 
         const updateEmbed = new EmbedBuilder()
           .setTitle('✅ Embeds Updated')
-          .setDescription(`**Update Summary:**\n- ✅ Successfully updated: ${updatedCount} embed(s)\n- ❌ Failed: ${failedCount} embed(s)\n\n**Updated Version:** ${currentVersion}`)
+          .setDescription(`**Update Summary:**\n- ✅ Successfully updated: ${updatedCount} embed(s)\n- ❌ Failed: ${failedCount} embed(s)\n\n**Versions Applied:**\n- 🎪 Auction: v${versionFile.auction || '1.0.0'}\n- 🔄 Trade: v${versionFile.trade || '1.0.0'}\n- 📦 Inventory: v${versionFile.inventory || '1.0.0'}`)
           .setColor(0x00ff00)
-          .setFooter({ text: `Version ${currentVersion} | Made By Atlas` });
+          .setFooter({ text: `Last Updated: ${versionFile.lastUpdated || new Date().toISOString()} | Made By Atlas` });
 
         await interaction.editReply({ embeds: [updateEmbed] });
       } catch (error) {
