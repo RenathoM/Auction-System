@@ -40,27 +40,143 @@ const itemCategories = {
   gifts: ['LikeGoalLootbox', '2026LootBox', 'SpintheWheellootbox']
 };
 
-// Image URLs for Huge pets
+// Image URLs for Huge pets and all items
 const hugeImages = {
+  // Black Hole Huges
   'HugeBlackHoleAngelus': '<:HugeBlackHoleAngelus:1461868865758695646>',
-  //'HugeIceCubeGingerbreadCorgi': ':HugeIceCubeGingerbreadCorgi:',
-  //'HugePartyDragon': ':HugePartyDragon:',
-  //'HugeGoldenPartyDragon': ':HugeGoldenPartyDragon:',
-  //'HugePresentChestMimic': ':HugePresentChestMimic:',
-  //'HugeGingerbreadAngelus': ':HugeGingerbreadAngelus:',
-  //'HugeGoldenGingerbreadAngelus': ':HugeGoldenGingerbreadAngelus:',
-  //'HugeNorthPoleWolf': ':HugeNorthPoleWolf:',
-  //'HugeGoldenNorthPoleWolf': ':HugeGoldenNorthPoleWolf:',
-  //'HugeIcyPhoenix': ':HugeIcyPhoenix:',
- //'HugeChestMimic': ':HugeChestMimic:',
-  //'HugeSorcererCat': ':HugeSorcererCat:',
-  //'HugeGoldenSorcererCat': ':HugeGoldenSorcererCat:',
-  //'HugePropellerCat': ':HugePropellerCat:',
-  //'HugeGoldenPropellerCat': ':HugeGoldenPropellerCat:',
-  //'HugeDominusAzureus': ':HugeDominusAzureus:',
-  //'HugeGoldenDominusAzureus': ':HugeGoldenDominusAzureus:',
-  //'HugeNinjaCat': ':HugeNinjaCat:',
-  //'HugeGoldenNinjaCat': ':HugeGoldenNinjaCat:'
+  //'HugeRainbowBlackHoleAngelus': '<:HugeRainbowBlackHoleAngelus:00000000000000000>',
+  
+  // Snow Globe Huges
+  //'HugeSnowGlobeHamster': '<:HugeSnowGlobeHamster:00000000000000000>',
+  //'HugeRainbowSnowGlobeHamster': '<:HugeRainbowSnowGlobeHamster:00000000000000000>',
+  //'HugeSnowGlobeCat': '<:HugeSnowGlobeCat:00000000000000000>',
+  //'HugeRainbowSnowGlobeCat': '<:HugeRainbowSnowGlobeCat:00000000000000000>',
+  
+  // Ice Cube Huges
+  //'HugeIceCubeGingerbreadCorgi': '<:HugeIceCubeGingerbreadCorgi:00000000000000000>',
+  //'HugeRainbowIceCubeGingerbreadCorgi': '<:HugeRainbowIceCubeGingerbreadCorgi:00000000000000000>',
+  //'HugeIceCubeCookieCutCat': '<:HugeIceCubeCookieCutCat:00000000000000000>',
+  //'HugeRainbowIceCubeCookieCutCat': '<:HugeRainbowIceCubeCookieCutCat:00000000000000000>',
+  
+  // Jelly Huges
+  //'HugeJellyDragon': '<:HugeJellyDragon:00000000000000000>',
+  //'HugeRainbowJellyDragon': '<:HugeRainbowJellyDragon:00000000000000000>',
+  //'HugeJellyKitsune': '<:HugeJellyKitsune:00000000000000000>',
+  //'HugeRainbowJellyKitsune': '<:HugeRainbowJellyKitsune:00000000000000000>',
+  
+  // Blazing Huges
+  //'HugeBlazingShark': '<:HugeBlazingShark:00000000000000000>',
+  //'HugeRainbowBlazingShark': '<:HugeRainbowBlazingShark:00000000000000000>',
+  //'HugeBlazingBat': '<:HugeBlazingBat:00000000000000000>',
+  //'HugeRainbowBlazingBat': '<:HugeRainbowBlazingBat:00000000000000000>',
+  
+  // Event Huges
+  //'HugePartyCat': '<:HugePartyCat:00000000000000000>',
+  //'HugeGoldenPartyCat': '<:HugeGoldenPartyCat:00000000000000000>',
+  //'HugeRainbowPartyCat': '<:HugeRainbowPartyCat:00000000000000000>',
+  //'HugePartyDragon': '<:HugePartyDragon:00000000000000000>',
+  //'HugeGoldenPartyDragon': '<:HugeGoldenPartyDragon:00000000000000000>',
+  //'HugeRainbowPartyDragon': '<:HugeRainbowPartyDragon:00000000000000000>',
+  //'HugeHellRock': '<:HugeHellRock:00000000000000000>',
+  //'HugeGoldenHellRock': '<:HugeGoldenHellRock:00000000000000000>',
+  //'HugeRainbowHellRock': '<:HugeRainbowHellRock:00000000000000000>',
+  
+  // Christmas.1 Huges
+  //'HugePresentChestMimic': '<:HugePresentChestMimic:00000000000000000>',
+  //'HugeRainbowPresentChestMimic': '<:HugeRainbowPresentChestMimic:00000000000000000>',
+  //'HugeGingerbreadAngelus': '<:HugeGingerbreadAngelus:00000000000000000>',
+  //'HugeGoldenGingerbreadAngelus': '<:HugeGoldenGingerbreadAngelus:00000000000000000>',
+  //'HugeRainbowGingerbreadAngelus': '<:HugeRainbowGingerbreadAngelus:00000000000000000>',
+  //'HugeNorthPoleWolf': '<:HugeNorthPoleWolf:00000000000000000>',
+  //'HugeGoldenNorthPoleWolf': '<:HugeGoldenNorthPoleWolf:00000000000000000>',
+  //'HugeRainbowNorthPoleWolf': '<:HugeRainbowNorthPoleWolf:00000000000000000>',
+  
+  // Christmas.2 Huges
+  //'HugeIcyPhoenix': '<:HugeIcyPhoenix:00000000000000000>',
+  //'HugeGoldenIcyPhoenix': '<:HugeGoldenIcyPhoenix:00000000000000000>',
+  //'HugeRainbowIcyPhoenix': '<:HugeRainbowIcyPhoenix:00000000000000000>',
+  
+  // Map Huges
+  //'HugeChestMimic': '<:HugeChestMimic:00000000000000000>',
+  //'HugeGoldenChestMimic': '<:HugeGoldenChestMimic:00000000000000000>',
+  //'HugeRainbowChestMimic': '<:HugeRainbowChestMimic:00000000000000000>',
+  //'HugeSorcererCat': '<:HugeSorcererCat:00000000000000000>',
+  //'HugeGoldenSorcererCat': '<:HugeGoldenSorcererCat:00000000000000000>',
+  //'HugeRainbowSorcererCat': '<:HugeRainbowSorcererCat:00000000000000000>',
+  //'HugePropellerCat': '<:HugePropellerCat:00000000000000000>',
+  //'HugeGoldenPropellerCat': '<:HugeGoldenPropellerCat:00000000000000000>',
+  //'HugeRainbowPropellerCat': '<:HugeRainbowPropellerCat:00000000000000000>',
+  //'HugeDominusAzureus': '<:HugeDominusAzureus:00000000000000000>',
+  //'HugeGoldenDominusAzureus': '<:HugeGoldenDominusAzureus:00000000000000000>',
+  //'HugeRainbowDominusAzureus': '<:HugeRainbowDominusAzureus:00000000000000000>',
+  //'HugeNinjaCat': '<:HugeNinjaCat:00000000000000000>',
+  //'HugeGoldenNinjaCat': '<:HugeGoldenNinjaCat:00000000000000000>',
+  //'HugeRainbowNinjaCat': '<:HugeRainbowNinjaCat:00000000000000000>',
+  //'HugePropellerDog': '<:HugePropellerDog:00000000000000000>',
+  //'HugeGoldenPropellerDog': '<:HugeGoldenPropellerDog:00000000000000000>',
+  //'HugeRainbowPropellerDog': '<:HugeRainbowPropellerDog:00000000000000000>',
+  //'HugeFantasyChest': '<:HugeFantasyChest:00000000000000000>',
+  //'HugeRainbowFantasyChest': '<:HugeRainbowFantasyChest:00000000000000000>',
+  
+  // Exclusives
+  //'BlazingShark': '<:BlazingShark:00000000000000000>',
+  //'BlazingGoldenShark': '<:BlazingGoldenShark:00000000000000000>',
+  //'BlazingRainbowShark': '<:BlazingRainbowShark:00000000000000000>',
+  //'BlazingBat': '<:BlazingBat:00000000000000000>',
+  //'BlazingGoldenBat': '<:BlazingGoldenBat:00000000000000000>',
+  //'BlazingRainbowBat': '<:BlazingRainbowBat:00000000000000000>',
+  //'BlazingCorgi': '<:BlazingCorgi:00000000000000000>',
+  //'BlazingGoldenCorgi': '<:BlazingGoldenCorgi:00000000000000000>',
+  //'BlazingRainbowCorgi': '<:BlazingRainbowCorgi:00000000000000000>',
+  //'IceCubeGingerbreadCat': '<:IceCubeGingerbreadCat:00000000000000000>',
+  //'IceCubeGoldenGingerbreadCat': '<:IceCubeGoldenGingerbreadCat:00000000000000000>',
+  //'IceCubeRainbowGingerbreadCat': '<:IceCubeRainbowGingerbreadCat:00000000000000000>',
+  //'IceCubeGingerbreadCorgi': '<:IceCubeGingerbreadCorgi:00000000000000000>',
+  //'IceCubeGoldenGingerbreadCorgi': '<:IceCubeGoldenGingerbreadCorgi:00000000000000000>',
+  //'IceCubeRainbowGingerbreadCorgi': '<:IceCubeRainbowGingerbreadCorgi:00000000000000000>',
+  //'IceCubeCookieCuteCat': '<:IceCubeCookieCuteCat:00000000000000000>',
+  //'IceCubeGoldenCookieCuteCat': '<:IceCubeGoldenCookieCuteCat:00000000000000000>',
+  //'IceCubeRainbowCookieCuteCat': '<:IceCubeRainbowCookieCuteCat:00000000000000000>',
+  //'SnowGlobeCat': '<:SnowGlobeCat:00000000000000000>',
+  //'SnowGlobeGoldenCat': '<:SnowGlobeGoldenCat:00000000000000000>',
+  //'SnowGlobeRainbowCat': '<:SnowGlobeRainbowCat:00000000000000000>',
+  //'SnowGlobeAxolotl': '<:SnowGlobeAxolotl:00000000000000000>',
+  //'SnowGlobeGoldenAxolotl': '<:SnowGlobeGoldenAxolotl:00000000000000000>',
+  //'SnowGlobeRainbowAxolotl': '<:SnowGlobeRainbowAxolotl:00000000000000000>',
+  //'SnowGlobeHamster': '<:SnowGlobeHamster:00000000000000000>',
+  //'SnowGlobeGoldenHamster': '<:SnowGlobeGoldenHamster:00000000000000000>',
+  //'SnowGlobeRainbowHamster': '<:SnowGlobeRainbowHamster:00000000000000000>',
+  //'JellyCat': '<:JellyCat:00000000000000000>',
+  //'JellyGoldenCat': '<:JellyGoldenCat:00000000000000000>',
+  //'JellyRainbowCat': '<:JellyRainbowCat:00000000000000000>',
+  //'JellyBunny': '<:JellyBunny:00000000000000000>',
+  //'JellyGoldenBunny': '<:JellyGoldenBunny:00000000000000000>',
+  //'JellyRainbowBunny': '<:JellyRainbowBunny:00000000000000000>',
+  //'JellyCorgi': '<:JellyCorgi:00000000000000000>',
+  //'JellyGoldenCorgi': '<:JellyGoldenCorgi:00000000000000000>',
+  //'JellyRainbowCorgi': '<:JellyRainbowCorgi:00000000000000000>',
+  //'BlackHoleAxolotl': '<:BlackHoleAxolotl:00000000000000000>',
+  //'BlackHoleGoldenAxolotl': '<:BlackHoleGoldenAxolotl:00000000000000000>',
+  //'BlackHoleRainbowAxolotl': '<:BlackHoleRainbowAxolotl:00000000000000000>',
+  //'BlackHoleImmortuus': '<:BlackHoleImmortuus:00000000000000000>',
+  //'BlackHoleGoldenImmortuus': '<:BlackHoleGoldenImmortuus:00000000000000000>',
+  //'BlackHoleRainbowImmortuus': '<:BlackHoleRainbowImmortuus:00000000000000000>',
+  //'BlackHoleKitsune': '<:BlackHoleKitsune:00000000000000000>',
+  //'BlackHoleGoldenKitsune': '<:BlackHoleGoldenKitsune:00000000000000000>',
+  //'BlackHoleRainbowKitsune': '<:BlackHoleRainbowKitsune:00000000000000000>',
+  
+  // Eggs
+  //'HypeEgg': '<:HypeEgg:00000000000000000>',
+  //'BlazingEgg': '<:BlazingEgg:00000000000000000>',
+  //'IceCubeEgg': '<:IceCubeEgg:00000000000000000>',
+  //'SnowGlobeEgg': '<:SnowGlobeEgg:00000000000000000>',
+  //'JellyEgg': '<:JellyEgg:00000000000000000>',
+  //'BlackHoleEgg': '<:BlackHoleEgg:00000000000000000>',
+  
+  // Gifts
+  //'LikeGoalLootbox': '<:LikeGoalLootbox:00000000000000000>',
+  //'2026LootBox': '<:2026LootBox:00000000000000000>',
+  //'SpintheWheellootbox': '<:SpintheWheellootbox:00000000000000000>'
 };
 
 client.once('ready', async () => {
@@ -247,21 +363,33 @@ function formatBid(num) {
   return num.toString();
 }
 
+function formatHugeName(name) {
+  // Convert HugeBlackHoleAngelus to Huge Black Hole Angelus
+  if (!name.startsWith('Huge')) return name;
+  
+  // Remove 'Huge' prefix and split by capital letters
+  const withoutHuge = name.substring(4);
+  const words = withoutHuge.split(/(?=[A-Z])/);
+  return 'Huge ' + words.join(' ');
+}
+
 function formatItemDisplay(item) {
   if (typeof item === 'object' && item.name && item.quantity) {
     // Check if it's a diamonds item
     if (item.name.includes('💎') || item.name.includes('Diamonds')) {
-      return `${item.name} x${formatBid(item.quantity)}`;
+      return `${item.name} x**${formatBid(item.quantity)}**`;
     }
     // Check if item has an emoji in hugeImages
     if (hugeImages[item.name]) {
-      return `${hugeImages[item.name]} ${item.name} x${item.quantity}`;
+      const formattedName = formatHugeName(item.name);
+      return `${hugeImages[item.name]} ${formattedName} x**${item.quantity}**`;
     }
-    return `${item.name} x${item.quantity}`;
+    return `${item.name} x**${item.quantity}**`;
   }
   // Check if string item has an emoji in hugeImages
   if (typeof item === 'string' && hugeImages[item]) {
-    return `${hugeImages[item]} ${item}`;
+    const formattedName = formatHugeName(item);
+    return `${hugeImages[item]} ${formattedName}`;
   }
   return item;
 }
@@ -1113,8 +1241,7 @@ client.on('interactionCreate', async (interaction) => {
         .setMaxValues(Math.min(items.length, 25))
         .addOptions(items.map(item => ({
           label: item,
-          value: item,
-          emoji: hugeImages[item] ? '🖼️' : undefined
+          value: item
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -1216,8 +1343,7 @@ client.on('interactionCreate', async (interaction) => {
         .setMaxValues(Math.min(items.length, 25))
         .addOptions(items.map(item => ({
           label: item,
-          value: item,
-          emoji: hugeImages[item] ? '🖼️' : undefined
+          value: item
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -1468,8 +1594,7 @@ client.on('interactionCreate', async (interaction) => {
         .setMaxValues(Math.min(items.length, 25))
         .addOptions(items.map(item => ({
           label: item,
-          value: item,
-          emoji: hugeImages[item] ? '🖼️' : undefined
+          value: item
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
