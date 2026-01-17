@@ -3,17 +3,20 @@ global.ReadableStream = ReadableStream;
 
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType } = require('discord.js');
 const config = require('./config.json');
+const fs = require('fs');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-let redirectChannelId = null;
-let redirectTradeChannelId = null;
+let redirectChannelId = config.defaultAuctionChannelId || null;
+let redirectTradeChannelId = config.defaultTradeChannelId || null;
 let redirectInventoryChannelId = null;
 
 const auctions = new Map(); // channelId -> { host, title, description, model, time, startingPrice, bids: [{user, diamonds, items}], timer, started, channelId, messageId, updateInterval }
 const trades = new Map(); // messageId -> { host, hostDiamonds, hostItems, offers: [{user, diamonds, items, timestamp}], channelId, messageId, accepted: false, acceptedUser: null }
 const inventories = new Map(); // userId -> { messageId, channelId, items, diamonds, lookingFor, robloxUsername, lastEdited }
 const userTradeCount = new Map(); // userId -> count of active trades
+const userGiveawayCount = new Map(); // userId -> count of active giveaways
+const giveaways = new Map(); // messageId -> { host, items: [{name, quantity}], channelId, messageId, entries: [{user, items}], duration, expiresAt }
 
 // Item categories for trades
 const itemCategories = {
@@ -33,8 +36,115 @@ const itemCategories = {
   gifts: ['LikeGoalLootbox', '2026LootBox', 'SpintheWheellootbox']
 };
 
+// Giveaway item categories (for /setupgiveaway)
+const giveawayItemCategories = {
+  huges: {
+    'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeGoldenBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
+    'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeGoldenSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeGoldenSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
+    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
+    'Jelly Huges': ['HugeJellyDragon', 'HugeGoldenJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeGoldenJellyKitsune', 'HugeRainbowJellyKitsune'],
+    'Blazing Huges': ['HugeBlazingShark', 'HugeGoldenBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeGoldenBlazingBat', 'HugeRainbowBlazingBat'],
+    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat'],
+    'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
+    'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
+  },
+  exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
+  eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg'],
+  gifts: ['LikeGoalLootbox', '2026LootBox', 'SpintheWheellootbox']
+};
+
+// Item emojis mapping - customize with your server emojis
+const itemEmojis = {
+  'HugeBlackHoleAngelus': '<:HugeBlackHoleAngelus:1461512580970618881>',
+  'HugeGoldenBlackHoleAngelus': '<:HugeGoldenBlackHoleAngelus:1461512580970618881>',
+  'HugeRainbowBlackHoleAngelus': '<:HugeRainbowBlackHoleAngelus:1461512580970618881>',
+  'HugeSnowGlobeHamster': '<:HugeSnowGlobeHamster:1461512580970618881>',
+  'HugeGoldenSnowGlobeHamster': '<:HugeGoldenSnowGlobeHamster:1461512580970618881>',
+  'HugeRainbowSnowGlobeHamster': '<:HugeRainbowSnowGlobeHamster:1461512580970618881>',
+  'HugeSnowGlobeCat': '<:HugeSnowGlobeCat:1461512580970618881>',
+  'HugeGoldenSnowGlobeCat': '<:HugeGoldenSnowGlobeCat:1461512580970618881>',
+  'HugeRainbowSnowGlobeCat': '<:HugeRainbowSnowGlobeCat:1461512580970618881>',
+  'HugeIceCubeGingerbreadCorgi': '<:HugeIceCubeGingerbreadCorgi:1461512580970618881>',
+  'HugeGoldenIceCubeGingerbreadCorgi': '<:HugeGoldenIceCubeGingerbreadCorgi:1461512580970618881>',
+  'HugeRainbowIceCubeGingerbreadCorgi': '<:HugeRainbowIceCubeGingerbreadCorgi:1461512580970618881>',
+  'HugeIceCubeCookieCutCat': '<:HugeIceCubeCookieCutCat:1461512580970618881>',
+  'HugeGoldenIceCubeCookieCutCat': '<:HugeGoldenIceCubeCookieCutCat:1461512580970618881>',
+  'HugeRainbowIceCubeCookieCutCat': '<:HugeRainbowIceCubeCookieCutCat:1461512580970618881>',
+  // Add more emojis as needed - format: 'ItemName': '<:ItemName:ID>'
+};
+
+// Helper functions
+function getItemEmoji(itemName) {
+  return itemEmojis[itemName] || '';
+}
+
+function formatItemName(itemName) {
+  // Convert "HugeBlackHoleAngelus" to "Huge Black Hole Angelus"
+  return itemName
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // Insert space between lowercase and uppercase
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2') // Insert space between multiple capitals
+    .trim();
+}
+
+function formatItemsText(items) {
+  // Format items with emoji and name
+  if (!items || items.length === 0) return 'None';
+  
+  return items.map(item => {
+    if (typeof item === 'object') {
+      const emoji = getItemEmoji(item.name);
+      const formattedName = formatItemName(item.name);
+      return `${emoji} **${formattedName}** (**x${item.quantity}**)`;
+    } else {
+      const emoji = getItemEmoji(item);
+      const formattedName = formatItemName(item);
+      return `${emoji} **${formattedName}**`;
+    }
+  }).join('\n');
+}
+
+// Save data every 5 minutes
+setInterval(() => {
+  saveData();
+}, 5 * 60 * 1000);
+
+function saveData() {
+  const data = {
+    redirectChannelId,
+    redirectTradeChannelId,
+    redirectInventoryChannelId,
+    inventories: Array.from(inventories.entries())
+  };
+  
+  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+}
+
+function loadData() {
+  try {
+    if (fs.existsSync('data.json')) {
+      const data = JSON.parse(fs.readFileSync('data.json', 'utf-8'));
+      
+      if (data.redirectChannelId) redirectChannelId = data.redirectChannelId;
+      if (data.redirectTradeChannelId) redirectTradeChannelId = data.redirectTradeChannelId;
+      if (data.redirectInventoryChannelId) redirectInventoryChannelId = data.redirectInventoryChannelId;
+      
+      if (data.inventories) {
+        data.inventories.forEach(([key, value]) => {
+          inventories.set(key, value);
+        });
+      }
+      
+      console.log('Data loaded successfully');
+    }
+  } catch (e) {
+    console.error('Error loading data:', e);
+  }
+}
+
 client.once('ready', async () => {
   console.log('Auction Bot is ready!');
+  loadData();
 
   // Register slash commands
   const commands = [
@@ -149,6 +259,10 @@ client.once('ready', async () => {
           required: true
         }
       ]
+    },
+    {
+      name: 'setupgiveaway',
+      description: 'Show giveaway setup information (admin only)'
     },
     {
       name: 'botcmds',
@@ -605,13 +719,36 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ embeds: [embed], components: [row] });
     }
 
+    if (commandName === 'setupgiveaway') {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+
+      const embed = new EmbedBuilder()
+        .setTitle('🎁 Giveaway System Setup')
+        .setDescription('Welcome to the giveaway system!\n\n**How it works:**\n- Create a giveaway with items you want to give away.\n- Users can enter the giveaway by clicking the button.\n- Winners are selected randomly from all entries.\n- The role <@&1462168024151883836> will be mentioned when the giveaway starts!\n\nClick the button below to create a new giveaway.')
+        .setColor(0xFF1493)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('create_giveaway')
+            .setLabel('Create Giveaway')
+            .setStyle(ButtonStyle.Primary)
+        );
+
+      await interaction.reply({ embeds: [embed], components: [row] });
+    }
+
     if (commandName === 'botcmds') {
       const pages = [
         {
           title: '🎪 Auction Commands',
           color: 0x00ff00,
           fields: [
-            { name: '/setupauction', value: 'Show auction setup information', inline: false },
+            { name: '/setupauction', value: 'Show auction setup information and create new auction (admin only)', inline: false },
             { name: '/bid', value: 'Place a bid on the current auction', inline: false },
             { name: '/endauction', value: 'End the current auction (host only)', inline: false },
             { name: '/auctionstatus', value: 'View current auction status', inline: false },
@@ -624,18 +761,19 @@ client.on('interactionCreate', async (interaction) => {
           title: '🔄 Trade Commands',
           color: 0x0099ff,
           fields: [
-            { name: '/setuptrade', value: 'Show trade setup information', inline: false },
+            { name: '/setuptrade', value: 'Show trade setup information and create new trade (admin only)', inline: false },
             { name: '/redirecttrade [channel]', value: 'Redirect all future trades to a specific channel (admin only)', inline: false },
             { name: '/deletetrade [messageid]', value: 'Delete a trade by message ID (admin only)', inline: false },
             { name: '/accepttrade [messageid]', value: 'Accept a trade by message ID (admin only)', inline: false }
           ]
         },
         {
-          title: '📦 Inventory Commands',
+          title: '📦 Inventory & 🎁 Giveaway Commands',
           color: 0x00a8ff,
           fields: [
-            { name: '/setupinventory', value: 'Create or view your inventory', inline: false },
-            { name: '/redirectinventory [channel]', value: 'Set the channel for inventories (admin only)', inline: false }
+            { name: '/setupinventory', value: 'Create or view your inventory (admin only)', inline: false },
+            { name: '/redirectinventory [channel]', value: 'Set the channel for inventories (admin only)', inline: false },
+            { name: '/setupgiveaway', value: 'Show giveaway setup and create new giveaway (admin only)', inline: false }
           ]
         },
         {
@@ -708,7 +846,7 @@ client.on('interactionCreate', async (interaction) => {
           title: '🎪 Auction Commands',
           color: 0x00ff00,
           fields: [
-            { name: '/setupauction', value: 'Show auction setup information', inline: false },
+            { name: '/setupauction', value: 'Show auction setup information and create new auction (admin only)', inline: false },
             { name: '/bid', value: 'Place a bid on the current auction', inline: false },
             { name: '/endauction', value: 'End the current auction (host only)', inline: false },
             { name: '/auctionstatus', value: 'View current auction status', inline: false },
@@ -721,18 +859,19 @@ client.on('interactionCreate', async (interaction) => {
           title: '🔄 Trade Commands',
           color: 0x0099ff,
           fields: [
-            { name: '/setuptrade', value: 'Show trade setup information', inline: false },
+            { name: '/setuptrade', value: 'Show trade setup information and create new trade (admin only)', inline: false },
             { name: '/redirecttrade [channel]', value: 'Redirect all future trades to a specific channel (admin only)', inline: false },
             { name: '/deletetrade [messageid]', value: 'Delete a trade by message ID (admin only)', inline: false },
             { name: '/accepttrade [messageid]', value: 'Accept a trade by message ID (admin only)', inline: false }
           ]
         },
         {
-          title: '📦 Inventory Commands',
+          title: '📦 Inventory & 🎁 Giveaway Commands',
           color: 0x00a8ff,
           fields: [
-            { name: '/setupinventory', value: 'Create or view your inventory', inline: false },
-            { name: '/redirectinventory [channel]', value: 'Set the channel for inventories (admin only)', inline: false }
+            { name: '/setupinventory', value: 'Create or view your inventory (admin only)', inline: false },
+            { name: '/redirectinventory [channel]', value: 'Set the channel for inventories (admin only)', inline: false },
+            { name: '/setupgiveaway', value: 'Show giveaway setup and create new giveaway (admin only)', inline: false }
           ]
         },
         {
@@ -860,6 +999,90 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
+    if (interaction.customId.startsWith('giveaway_enter_')) {
+      const messageId = interaction.message.id;
+      const giveaway = giveaways.get(messageId);
+      if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', ephemeral: true });
+
+      // Check if user already entered
+      const alreadyEntered = giveaway.entries.some(entry => entry.user.id === interaction.user.id);
+      if (alreadyEntered) {
+        return interaction.reply({ content: 'You are already entered in this giveaway!', ephemeral: true });
+      }
+
+      // Add entry
+      giveaway.entries.push({
+        user: interaction.user,
+        enteredAt: Date.now()
+      });
+
+      await interaction.reply({ content: `✅ You have entered the giveaway! Total entries: ${giveaway.entries.length}`, ephemeral: true });
+    }
+
+    if (interaction.customId.startsWith('giveaway_end_')) {
+      const messageId = interaction.message.id;
+      const giveaway = giveaways.get(messageId);
+      if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', ephemeral: true });
+
+      if (giveaway.host.id !== interaction.user.id) {
+        const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+        const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+        if (!hasAdminRole) return interaction.reply({ content: 'Only the host or admin can end the giveaway.', ephemeral: true });
+      }
+
+      if (giveaway.entries.length === 0) {
+        giveaways.delete(messageId);
+        // Decrement giveaway count for host
+        const hostId = giveaway.host.id;
+        userGiveawayCount.set(hostId, Math.max(0, (userGiveawayCount.get(hostId) || 1) - 1));
+        return interaction.reply({ content: 'Giveaway ended with no entries.', ephemeral: true });
+      }
+
+      // Select random winner
+      const randomIndex = Math.floor(Math.random() * giveaway.entries.length);
+      const winner = giveaway.entries[randomIndex];
+
+      // Create winner embed
+      const embed = new EmbedBuilder()
+        .setTitle('🎁 Giveaway Ended!')
+        .setColor(0xFF1493)
+        .setDescription(`**Winner:** ${winner.user}`)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
+
+      // List items
+      let itemsText = 'None';
+      if (giveaway.items.length > 0) {
+        itemsText = giveaway.items.map(item => 
+          typeof item === 'object' ? `${item.name} x${item.quantity}` : item
+        ).join('\n');
+      }
+
+      embed.addFields({
+        name: 'Giveaway Items',
+        value: itemsText,
+        inline: false
+      });
+
+      embed.addFields({
+        name: 'Total Entries',
+        value: giveaway.entries.length.toString(),
+        inline: true
+      });
+
+      const channel = interaction.guild.channels.cache.get(giveaway.channelId);
+      await channel.send({ embeds: [embed] });
+
+      // Notify winner
+      await channel.send(`🎉 Congratulations ${winner.user}! You won the giveaway!`);
+
+      // Decrement giveaway count for host
+      const hostId = giveaway.host.id;
+      userGiveawayCount.set(hostId, Math.max(0, (userGiveawayCount.get(hostId) || 1) - 1));
+
+      giveaways.delete(messageId);
+      await interaction.reply({ content: 'Giveaway ended! Winner selected.', ephemeral: true });
+    }
+
     if (interaction.customId === 'create_auction') {
       const modal = new ModalBuilder()
         .setCustomId('auction_modal')
@@ -900,6 +1123,24 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'create_trade') {
+      // Check trade limit
+      const specialRoleId = '1461534174589485197';
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      
+      const hasSpecialRole = interaction.member.roles.cache.has(specialRoleId);
+      const isAdmin = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      
+      const userId = interaction.user.id;
+      const currentTrades = userTradeCount.get(userId) || 0;
+      const maxTrades = isAdmin ? Infinity : (hasSpecialRole ? 5 : 1);
+      
+      if (currentTrades >= maxTrades) {
+        return interaction.reply({ 
+          content: `You have reached the maximum number of simultaneous trades (${maxTrades}).`, 
+          ephemeral: true 
+        });
+      }
+
       // Show category selection
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -941,6 +1182,52 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
       await interaction.reply({ content: 'Select an item category to add to your inventory:', components: [row], ephemeral: true });
+    }
+
+    if (interaction.customId === 'create_giveaway') {
+      // Check if user has the required role to create giveaway
+      const giveawayCreatorRoleId = '1461798386201006324';
+      const specialRoleId = '1461534174589485197';
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      
+      const hasGiveawayRole = interaction.member.roles.cache.has(giveawayCreatorRoleId);
+      const hasSpecialRole = interaction.member.roles.cache.has(specialRoleId);
+      const isAdmin = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      
+      if (!hasGiveawayRole && !hasSpecialRole && !isAdmin) {
+        return interaction.reply({ content: 'You do not have permission to create a giveaway.', ephemeral: true });
+      }
+
+      // Check giveaway limit
+      const userId = interaction.user.id;
+      const currentGiveaways = userGiveawayCount.get(userId) || 0;
+      const maxGiveaways = isAdmin ? Infinity : (hasSpecialRole ? 3 : 1);
+      
+      if (currentGiveaways >= maxGiveaways) {
+        return interaction.reply({ 
+          content: `You have reached the maximum number of simultaneous giveaways (${maxGiveaways}).`, 
+          ephemeral: true 
+        });
+      }
+
+      // Initialize giveaway items for this user
+      interaction.user.giveawayItems = [];
+
+      // Show category selection for giveaway
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const categorySelect = new StringSelectMenuBuilder()
+        .setCustomId('giveaway_category_select')
+        .setPlaceholder('Select an item category')
+        .addOptions([
+          { label: 'Huges', value: 'huges', emoji: '🔥' },
+          { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+          { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(categorySelect);
+      await interaction.reply({ content: 'Select an item category to add to your giveaway:', components: [row], ephemeral: true });
     }
 
     if (interaction.customId === 'trade_offer_button') {
@@ -1112,7 +1399,11 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`trade_item_select_${category}`)
         .setPlaceholder(`Select items from ${category}`)
         .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.slice(0, 25).map(item => ({ label: item, value: item })));
+        .addOptions(items.slice(0, 25).map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
       await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
@@ -1127,7 +1418,11 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`trade_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
         .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ label: item, value: item })));
+        .addOptions(items.map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
       await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
@@ -1282,6 +1577,22 @@ client.on('interactionCreate', async (interaction) => {
 
         const row = new ActionRowBuilder().addComponents(categorySelect);
         await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
+      } else if (choice === 'remove_items') {
+        // Show a modal to remove items
+        const itemsList = interaction.user.tradeItems || [];
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const itemSelect = new StringSelectMenuBuilder()
+          .setCustomId('trade_remove_item_select')
+          .setPlaceholder('Select items to remove')
+          .setMaxValues(Math.min(itemsList.length, 25))
+          .addOptions(itemsList.map((item, idx) => ({ 
+            label: `${item.name} (x${item.quantity})`, 
+            value: idx.toString()
+          })));
+
+        const row = new ActionRowBuilder().addComponents(itemSelect);
+        await interaction.reply({ content: 'Select items to remove:', components: [row], flags: 64 });
       } else if (choice === 'confirm_items') {
         // Move to diamonds and target user
         const diamondsModal = new ModalBuilder()
@@ -1356,6 +1667,75 @@ client.on('interactionCreate', async (interaction) => {
         delete interaction.user.selectedOfferMessageId;
 
         await interaction.showModal(diamondsModal);
+      } else if (choice === 'remove_items') {
+        // Show items to remove
+        const items = interaction.user.offerTradeItems || [];
+        if (items.length === 0) {
+          return await interaction.reply({ content: 'No items to remove.', flags: 64 });
+        }
+
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const removeSelect = new StringSelectMenuBuilder()
+          .setCustomId(`offer_remove_item_select_${messageId}`)
+          .setPlaceholder('Select items to remove')
+          .setMinValues(1)
+          .setMaxValues(Math.min(25, items.length));
+
+        items.forEach((item, index) => {
+          const emoji = getItemEmoji(item.name);
+          removeSelect.addOptions({
+            label: `${formatItemName(item.name)} (x${item.quantity})`,
+            value: `${index}`,
+            emoji: emoji || '📦'
+          });
+        });
+
+        const row = new ActionRowBuilder().addComponents(removeSelect);
+        await interaction.reply({ content: 'Select items to remove:', components: [row], flags: 64 });
+      }
+    }
+
+    if (interaction.customId.startsWith('offer_remove_item_select_')) {
+      const messageId = interaction.customId.replace('offer_remove_item_select_', '');
+      const indices = interaction.values.map(v => parseInt(v)).sort((a, b) => b - a);
+      const items = interaction.user.offerTradeItems || [];
+
+      // Remove items in reverse order to maintain correct indices
+      indices.forEach(index => {
+        if (index >= 0 && index < items.length) {
+          items.splice(index, 1);
+        }
+      });
+
+      if (items.length === 0) {
+        await interaction.reply({ content: 'All items removed. Please add items again.', flags: 64 });
+        delete interaction.user.offerTradeItems;
+      } else {
+        // Redisplay the continue select
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const continueSelect = new StringSelectMenuBuilder()
+          .setCustomId(`offer_continue_select_${messageId}`)
+          .setPlaceholder('What would you like to do?')
+          .addOptions([
+            { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+            { label: '➕ Add Another Category', value: 'add_category' },
+            { label: '❌ Remove Items', value: 'remove_items' }
+          ]);
+
+        const row = new ActionRowBuilder().addComponents(continueSelect);
+        
+        let itemsList = '';
+        items.forEach(item => {
+          itemsList += `${item.name} x${item.quantity}\n`;
+        });
+
+        await interaction.reply({ 
+          content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+          components: [row], 
+          flags: 64 
+        });
       }
     }
 
@@ -1416,6 +1796,195 @@ client.on('interactionCreate', async (interaction) => {
         delete interaction.user.selectedInventorySubcategory;
 
         await interaction.showModal(inventoryModal);
+      } else if (choice === 'remove_items') {
+        // Show items to remove
+        const items = interaction.user.inventoryItems || [];
+        if (items.length === 0) {
+          return await interaction.reply({ content: 'No items to remove.', flags: 64 });
+        }
+
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const removeSelect = new StringSelectMenuBuilder()
+          .setCustomId('inventory_remove_item_select')
+          .setPlaceholder('Select items to remove')
+          .setMinValues(1)
+          .setMaxValues(Math.min(25, items.length));
+
+        items.forEach((item, index) => {
+          const emoji = getItemEmoji(item.name);
+          removeSelect.addOptions({
+            label: `${formatItemName(item.name)} (x${item.quantity})`,
+            value: `${index}`,
+            emoji: emoji || '📦'
+          });
+        });
+
+        const row = new ActionRowBuilder().addComponents(removeSelect);
+        await interaction.reply({ content: 'Select items to remove:', components: [row], flags: 64 });
+      }
+    }
+
+    if (interaction.customId === 'inventory_remove_item_select') {
+      const indices = interaction.values.map(v => parseInt(v)).sort((a, b) => b - a);
+      const items = interaction.user.inventoryItems || [];
+
+      // Remove items in reverse order to maintain correct indices
+      indices.forEach(index => {
+        if (index >= 0 && index < items.length) {
+          items.splice(index, 1);
+        }
+      });
+
+      if (items.length === 0) {
+        await interaction.reply({ content: 'All items removed. Please add items again.', flags: 64 });
+        delete interaction.user.inventoryItems;
+      } else {
+        // Redisplay the continue select
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const continueSelect = new StringSelectMenuBuilder()
+          .setCustomId(`inventory_continue_select`)
+          .setPlaceholder('What would you like to do?')
+          .addOptions([
+            { label: '✅ Continue to Next Step', value: 'continue_to_setup' },
+            { label: '➕ Add Another Category', value: 'add_category' },
+            { label: '❌ Remove Items', value: 'remove_items' }
+          ]);
+
+        const row = new ActionRowBuilder().addComponents(continueSelect);
+        
+        let itemsList = '';
+        items.forEach(item => {
+          itemsList += `${item.name} x${item.quantity}\n`;
+        });
+
+        await interaction.reply({ 
+          content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+          components: [row], 
+          flags: 64 
+        });
+      }
+    }
+
+    if (interaction.customId === 'giveaway_continue_select') {
+      const choice = interaction.values[0];
+
+      if (choice === 'add_category') {
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const categorySelect = new StringSelectMenuBuilder()
+          .setCustomId('giveaway_category_select')
+          .setPlaceholder('Select another item category')
+          .addOptions([
+            { label: 'Huges', value: 'huges', emoji: '🔥' },
+            { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+            { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+            { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          ]);
+
+        const row = new ActionRowBuilder().addComponents(categorySelect);
+        await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
+      } else if (choice === 'create_giveaway') {
+        // Move to giveaway setup modal
+        const giveawayModal = new ModalBuilder()
+          .setCustomId('giveaway_setup_modal')
+          .setTitle('Create Your Giveaway');
+
+        const descriptionInput = new TextInputBuilder()
+          .setCustomId('gwa_description')
+          .setLabel('Giveaway Description (optional)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Describe the giveaway...')
+          .setRequired(false);
+
+        const durationInput = new TextInputBuilder()
+          .setCustomId('gwa_duration')
+          .setLabel('Duration (in minutes, max 1440 = 24 hours)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g., 60 for 1 hour, 1440 for 24 hours')
+          .setMinLength(1)
+          .setMaxLength(4)
+          .setRequired(true);
+
+        const row1 = new ActionRowBuilder().addComponents(descriptionInput);
+        const row2 = new ActionRowBuilder().addComponents(durationInput);
+
+        giveawayModal.addComponents(row1, row2);
+        
+        delete interaction.user.selectedGiveawayItems;
+        delete interaction.user.selectedGiveawayCategory;
+        delete interaction.user.selectedGiveawaySubcategory;
+
+        await interaction.showModal(giveawayModal);
+      } else if (choice === 'remove_items') {
+        // Show items to remove
+        const items = interaction.user.giveawayItems || [];
+        if (items.length === 0) {
+          return await interaction.reply({ content: 'No items to remove.', flags: 64 });
+        }
+
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const removeSelect = new StringSelectMenuBuilder()
+          .setCustomId('giveaway_remove_item_select')
+          .setPlaceholder('Select items to remove')
+          .setMinValues(1)
+          .setMaxValues(Math.min(25, items.length));
+
+        items.forEach((item, index) => {
+          const emoji = getItemEmoji(item.name);
+          removeSelect.addOptions({
+            label: `${formatItemName(item.name)} (x${item.quantity})`,
+            value: `${index}`,
+            emoji: emoji || '📦'
+          });
+        });
+
+        const row = new ActionRowBuilder().addComponents(removeSelect);
+        await interaction.reply({ content: 'Select items to remove:', components: [row], flags: 64 });
+      }
+    }
+
+    if (interaction.customId === 'giveaway_remove_item_select') {
+      const indices = interaction.values.map(v => parseInt(v)).sort((a, b) => b - a);
+      const items = interaction.user.giveawayItems || [];
+
+      // Remove items in reverse order to maintain correct indices
+      indices.forEach(index => {
+        if (index >= 0 && index < items.length) {
+          items.splice(index, 1);
+        }
+      });
+
+      if (items.length === 0) {
+        await interaction.reply({ content: 'All items removed. Please add items again.', flags: 64 });
+        delete interaction.user.giveawayItems;
+      } else {
+        // Redisplay the continue select
+        const { StringSelectMenuBuilder } = require('discord.js');
+        
+        const continueSelect = new StringSelectMenuBuilder()
+          .setCustomId(`giveaway_continue_select`)
+          .setPlaceholder('What would you like to do?')
+          .addOptions([
+            { label: '✅ Create Giveaway', value: 'create_giveaway' },
+            { label: '➕ Add Another Category', value: 'add_category' },
+            { label: '❌ Remove Items', value: 'remove_items' }
+          ]);
+
+        const row = new ActionRowBuilder().addComponents(continueSelect);
+        
+        let itemsList = '';
+        items.forEach(item => {
+          itemsList += `${item.name} x${item.quantity}\n`;
+        });
+
+        await interaction.reply({ 
+          content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+          components: [row], 
+          flags: 64 
+        });
       }
     }
 
@@ -1458,7 +2027,11 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`inventory_item_select_${category}`)
         .setPlaceholder(`Select items from ${category}`)
         .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.slice(0, 25).map(item => ({ label: item, value: item })));
+        .addOptions(items.slice(0, 25).map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
       await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
@@ -1473,7 +2046,11 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`inventory_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
         .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ label: item, value: item })));
+        .addOptions(items.map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
       await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
@@ -1509,6 +2086,88 @@ client.on('interactionCreate', async (interaction) => {
       quantityModal.addComponents(inputs);
       await interaction.showModal(quantityModal);
     }
+
+    if (interaction.customId === 'giveaway_category_select') {
+      const category = interaction.values[0];
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      if (category === 'huges') {
+        const subcategorySelect = new StringSelectMenuBuilder()
+          .setCustomId('giveaway_huge_subcategory_select')
+          .setPlaceholder('Select a Huge subcategory')
+          .addOptions(Object.keys(giveawayItemCategories.huges).map(sub => ({
+            label: sub,
+            value: sub
+          })));
+        const row = new ActionRowBuilder().addComponents(subcategorySelect);
+        await interaction.reply({ content: `Select a subcategory from **Huges**:`, components: [row], flags: 64 });
+        return;
+      }
+      
+      const items = giveawayItemCategories[category];
+      const itemSelect = new StringSelectMenuBuilder()
+        .setCustomId(`giveaway_item_select_${category}`)
+        .setPlaceholder(`Select items from ${category}`)
+        .setMaxValues(Math.min(items.length, 25))
+        .addOptions(items.slice(0, 25).map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
+
+      const row = new ActionRowBuilder().addComponents(itemSelect);
+      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+    }
+
+    if (interaction.customId === 'giveaway_huge_subcategory_select') {
+      const subcategory = interaction.values[0];
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const items = giveawayItemCategories.huges[subcategory];
+      const itemSelect = new StringSelectMenuBuilder()
+        .setCustomId(`giveaway_item_select_huges_${subcategory}`)
+        .setPlaceholder(`Select items from ${subcategory}`)
+        .setMaxValues(Math.min(items.length, 25))
+        .addOptions(items.map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
+
+      const row = new ActionRowBuilder().addComponents(itemSelect);
+      await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
+    }
+
+    if (interaction.customId.startsWith('giveaway_item_select_')) {
+      const parts = interaction.customId.replace('giveaway_item_select_', '').split('_');
+      let category = parts[0];
+      let subcategory = parts.length > 1 ? parts.slice(1).join('_') : null;
+      
+      const selectedItems = interaction.values;
+
+      interaction.user.selectedGiveawayItems = selectedItems;
+      interaction.user.selectedGiveawayCategory = category;
+      interaction.user.selectedGiveawaySubcategory = subcategory;
+
+      const quantityModal = new ModalBuilder()
+        .setCustomId(`giveaway_item_quantities_modal`)
+        .setTitle('Select Quantities');
+
+      let inputs = [];
+      selectedItems.slice(0, 5).forEach((item, index) => {
+        const input = new TextInputBuilder()
+          .setCustomId(`gwa_qty_${index}`)
+          .setLabel(`${item} quantity`)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('1')
+          .setRequired(true)
+          .setMaxLength(3);
+        inputs.push(new ActionRowBuilder().addComponents(input));
+      });
+
+      quantityModal.addComponents(inputs);
+      await interaction.showModal(quantityModal);
+    }
   }
 
   if (interaction.isModalSubmit()) {
@@ -1529,7 +2188,8 @@ client.on('interactionCreate', async (interaction) => {
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-          { label: '➕ Add Another Category', value: 'add_category' }
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
@@ -1545,6 +2205,44 @@ client.on('interactionCreate', async (interaction) => {
         flags: 64 
       });
       return;
+    }
+
+    if (interaction.customId === 'trade_remove_item_select') {
+      const indicesToRemove = interaction.values.map(v => parseInt(v)).sort((a, b) => b - a);
+      
+      indicesToRemove.forEach(idx => {
+        if (interaction.user.tradeItems && interaction.user.tradeItems[idx]) {
+          interaction.user.tradeItems.splice(idx, 1);
+        }
+      });
+
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId('trade_continue_select')
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      if (interaction.user.tradeItems && interaction.user.tradeItems.length > 0) {
+        interaction.user.tradeItems.forEach(item => {
+          itemsList += `${item.name} x${item.quantity}\n`;
+        });
+      } else {
+        itemsList = 'No items selected';
+      }
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
     }
 
     if (interaction.customId.startsWith('offer_diamonds_modal_')) {
@@ -1565,7 +2263,8 @@ client.on('interactionCreate', async (interaction) => {
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-          { label: '➕ Add Another Category', value: 'add_category' }
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
@@ -1600,7 +2299,8 @@ client.on('interactionCreate', async (interaction) => {
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Continue to Next Step', value: 'continue_to_setup' },
-          { label: '➕ Add Another Category', value: 'add_category' }
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
@@ -1643,7 +2343,8 @@ client.on('interactionCreate', async (interaction) => {
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-          { label: '➕ Add Another Category', value: 'add_category' }
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
@@ -1687,7 +2388,8 @@ client.on('interactionCreate', async (interaction) => {
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-          { label: '➕ Add Another Category', value: 'add_category' }
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
@@ -1729,13 +2431,55 @@ client.on('interactionCreate', async (interaction) => {
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Continue to Next Step', value: 'continue_to_setup' },
-          { label: '➕ Add Another Category', value: 'add_category' }
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
       let itemsList = '';
       interaction.user.inventoryItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
+      return;
+    }
+
+    if (interaction.customId === 'giveaway_item_quantities_modal') {
+      const selectedItems = interaction.user.selectedGiveawayItems || [];
+      const category = interaction.user.selectedGiveawayCategory;
+      const subcategory = interaction.user.selectedGiveawaySubcategory;
+
+      const itemsWithQty = selectedItems.map((item, index) => {
+        const qty = parseInt(interaction.fields.getTextInputValue(`gwa_qty_${index}`) || '1');
+        return { name: item, quantity: Math.max(1, qty) };
+      });
+
+      if (!interaction.user.giveawayItems) {
+        interaction.user.giveawayItems = [];
+      }
+      interaction.user.giveawayItems = interaction.user.giveawayItems.concat(itemsWithQty);
+
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`giveaway_continue_select`)
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Create Giveaway', value: 'create_giveaway' },
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.giveawayItems.forEach(item => {
         itemsList += `${item.name} x${item.quantity}\n`;
       });
 
@@ -1791,13 +2535,11 @@ client.on('interactionCreate', async (interaction) => {
         embed.setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() });
       }
 
-      const itemsText = inventoryItems.length > 0 ? inventoryItems.map(item => 
-        `${item.name} x${item.quantity}`
-      ).join('\n') : 'None';
+      const itemsText = formatItemsText(inventoryItems);
 
       embed.addFields({
         name: `Items${diamonds > 0 ? ` + ${diamonds} 💎` : ''}`,
-        value: itemsText || 'None',
+        value: itemsText,
         inline: true
       });
 
@@ -1841,6 +2583,108 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    if (interaction.customId === 'giveaway_setup_modal') {
+      const giveawayItems = interaction.user.giveawayItems || [];
+      const description = interaction.fields.getTextInputValue('gwa_description') || '';
+      const durationStr = interaction.fields.getTextInputValue('gwa_duration');
+      
+      // Validate duration
+      let duration = parseInt(durationStr);
+      if (isNaN(duration) || duration < 1 || duration > 1440) {
+        return interaction.reply({ 
+          content: 'Invalid duration. Please enter a number between 1 and 1440 minutes (24 hours).', 
+          ephemeral: true 
+        });
+      }
+      
+      delete interaction.user.giveawayItems;
+      delete interaction.user.selectedGiveawayItems;
+      delete interaction.user.selectedGiveawayCategory;
+      delete interaction.user.selectedGiveawaySubcategory;
+
+      // Create giveaway embed
+      const embed = new EmbedBuilder()
+        .setTitle('🎁 Giveaway')
+        .setDescription(description ? `**${description}**\n\n**Click the button below to enter the giveaway!**` : '**Click the button below to enter the giveaway!**')
+        .setColor(0xFF1493)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+      // Format giveaway items
+      const giveawayItemsText = formatItemsText(giveawayItems);
+
+      embed.addFields({
+        name: 'Giveaway Items',
+        value: giveawayItemsText,
+        inline: false
+      });
+
+      embed.addFields({
+        name: 'Hosted by',
+        value: interaction.user.toString(),
+        inline: false
+      });
+
+      // Add duration field
+      const durationHours = Math.floor(duration / 60);
+      const durationMins = duration % 60;
+      let durationText = '';
+      if (durationHours > 0) durationText += `${durationHours}h `;
+      if (durationMins > 0) durationText += `${durationMins}m`;
+      if (!durationText) durationText = duration + 'm';
+      
+      embed.addFields({
+        name: 'Duration',
+        value: durationText,
+        inline: false
+      });
+
+      const enterButton = new ButtonBuilder()
+        .setCustomId(`giveaway_enter_${Date.now()}`)
+        .setLabel('Enter Giveaway')
+        .setStyle(ButtonStyle.Success);
+
+      const endButton = new ButtonBuilder()
+        .setCustomId(`giveaway_end_${Date.now()}`)
+        .setLabel('End Giveaway')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(enterButton, endButton);
+
+      const targetChannel = redirectTradeChannelId ? interaction.guild.channels.cache.get(redirectTradeChannelId) : interaction.channel;
+      
+      // Send ping message with role mention
+      await targetChannel.send(`<@&${config.giveawayRoleId}> **New Giveaway Started!**`);
+      
+      const message = await targetChannel.send({ embeds: [embed], components: [row] });
+
+      const expiresAt = Date.now() + (duration * 60 * 1000);
+      const giveawayData = {
+        host: interaction.user,
+        items: giveawayItems,
+        channelId: targetChannel.id,
+        messageId: message.id,
+        entries: [],
+        duration: duration,
+        expiresAt: expiresAt
+      };
+
+      giveaways.set(message.id, giveawayData);
+      
+      // Increment giveaway count for user
+      const userId = interaction.user.id;
+      userGiveawayCount.set(userId, (userGiveawayCount.get(userId) || 0) + 1);
+      
+      // Set timeout to end giveaway and decrement counter
+      setTimeout(() => {
+        giveaways.delete(message.id);
+        userGiveawayCount.set(userId, Math.max(0, (userGiveawayCount.get(userId) || 1) - 1));
+      }, duration * 60 * 1000);
+
+      await interaction.reply({ content: `Giveaway created! Posted to the channel with role mention! Duration: ${durationText}`, flags: 64 });
+      return;
+    }
+
     if (interaction.customId === 'trade_setup_modal') {
       const diamondsStr = interaction.fields.getTextInputValue('trade_diamonds') || '0';
       const targetUsername = interaction.fields.getTextInputValue('trade_target_user') || '';
@@ -1865,16 +2709,11 @@ client.on('interactionCreate', async (interaction) => {
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format host items with quantities
-      let hostItemsText = 'None';
-      if (hostItems.length > 0) {
-        hostItemsText = hostItems.map(item => 
-          typeof item === 'object' ? `${item.name} x${item.quantity}` : item
-        ).join('\n');
-      }
+      const hostItemsText = formatItemsText(hostItems);
       
       embed.addFields({
         name: `Host Items${diamonds > 0 ? ` + ${diamonds} 💎` : ''}`,
-        value: hostItemsText || 'None',
+        value: hostItemsText,
         inline: false
       });
 
@@ -2095,34 +2934,28 @@ async function updateTradeEmbed(guild, trade, messageId) {
       embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** ${trade.host}`);
     }
 
-    const hostItemsText = trade.hostItems.length > 0 ? trade.hostItems.map(item => 
-      typeof item === 'object' ? `${item.name} x${item.quantity}` : item
-    ).join('\n') : 'None';
+    const hostItemsText = formatItemsText(trade.hostItems);
     embed.addFields({
       name: `Host${trade.hostDiamonds > 0 ? ` (+ ${trade.hostDiamonds} 💎)` : ''}`,
-      value: hostItemsText || 'None',
+      value: hostItemsText,
       inline: true
     });
 
     if (trade.offers.length > 0 && !trade.accepted) {
       const lastOffer = trade.offers[trade.offers.length - 1];
-      const guestItemsText = lastOffer.items.length > 0 ? lastOffer.items.map(item => 
-        typeof item === 'object' ? `${item.name} x${item.quantity}` : item
-      ).join('\n') : 'None';
+      const guestItemsText = formatItemsText(lastOffer.items);
       embed.addFields({
         name: `${lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${lastOffer.diamonds} 💎)` : ''}`,
-        value: guestItemsText || 'None',
+        value: guestItemsText,
         inline: true
       });
     } else if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
-        const guestItemsText = acceptedOffer.items.length > 0 ? acceptedOffer.items.map(item => 
-          typeof item === 'object' ? `${item.name} x${item.quantity}` : item
-        ).join('\n') : 'None';
+        const guestItemsText = formatItemsText(acceptedOffer.items);
         embed.addFields({
           name: `${acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${acceptedOffer.diamonds} 💎)` : ''}`,
-          value: guestItemsText || 'None',
+          value: guestItemsText,
           inline: true
         });
       }
