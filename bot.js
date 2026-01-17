@@ -253,7 +253,15 @@ function formatItemDisplay(item) {
     if (item.name.includes('💎') || item.name.includes('Diamonds')) {
       return `${item.name} x${formatBid(item.quantity)}`;
     }
+    // Check if item has an emoji in hugeImages
+    if (hugeImages[item.name]) {
+      return `${hugeImages[item.name]} ${item.name} x${item.quantity}`;
+    }
     return `${item.name} x${item.quantity}`;
+  }
+  // Check if string item has an emoji in hugeImages
+  if (typeof item === 'string' && hugeImages[item]) {
+    return `${hugeImages[item]} ${item}`;
   }
   return item;
 }
@@ -498,7 +506,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Trade System Setup')
         .setDescription('Welcome to the live trade system!\n\n**How it works:**\n- Create a trade offer with items or diamonds.\n- Other users can place their offers in response.\n- Host can accept or decline offers.\n- Once accepted, both users are notified.\n\nClick the button below to create a new trade.')
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.1.1 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -2053,7 +2061,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Trade Offer')
         .setDescription(`**Host:** ${interaction.user}\n**Status:** Waiting for offers`)
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format host items with quantities
@@ -2339,7 +2347,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
     const embed = new EmbedBuilder()
       .setTitle('Trade Offer')
       .setColor(trade.accepted ? 0x00ff00 : 0x0099ff)
-      .setFooter({ text: 'Version 1.1.2 | Made By Atlas' })
+      .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
       .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
     if (trade.accepted) {
