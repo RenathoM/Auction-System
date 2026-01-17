@@ -163,6 +163,23 @@ function formatItemsText(items) {
   }).join('\n');
 }
 
+// Helper function to format items list with emoji and abbreviations
+function formatItemsList(items) {
+  if (!items || items.length === 0) return 'None';
+  
+  return items.map(item => {
+    // Special handling for Diamonds - use formatBid for abbreviations
+    if (item.name === '💎 Diamonds') {
+      const abbreviatedValue = formatBid(item.quantity);
+      return `💎 **Diamonds** (${abbreviatedValue} 💎)`;
+    }
+    
+    const emoji = getItemEmoji(item.name) || '';
+    const formattedName = formatItemName(item.name);
+    return `${emoji} **${formattedName}** (x${item.quantity})`;
+  }).join('\n');
+}
+
 // Save data every 5 minutes
 setInterval(() => {
   saveData();
@@ -2134,10 +2151,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const row = new ActionRowBuilder().addComponents(continueSelect);
         
-        let itemsList = '';
-        items.forEach(item => {
-          itemsList += `${item.name} x${item.quantity}\n`;
-        });
+        const itemsList = formatItemsList(items);
 
         await interaction.reply({ 
           content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2262,10 +2276,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const row = new ActionRowBuilder().addComponents(continueSelect);
         
-        let itemsList = '';
-        items.forEach(item => {
-          itemsList += `${item.name} x${item.quantity}\n`;
-        });
+        const itemsList = formatItemsList(items);
 
         await interaction.reply({ 
           content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2384,10 +2395,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const row = new ActionRowBuilder().addComponents(continueSelect);
         
-        let itemsList = '';
-        items.forEach(item => {
-          itemsList += `${item.name} x${item.quantity}\n`;
-        });
+        const itemsList = formatItemsList(items);
 
         await interaction.reply({ 
           content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2623,10 +2631,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.tradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.tradeItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2658,14 +2663,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      if (interaction.user.tradeItems && interaction.user.tradeItems.length > 0) {
-        interaction.user.tradeItems.forEach(item => {
-          itemsList += `${item.name} x${item.quantity}\n`;
-        });
-      } else {
-        itemsList = 'No items selected';
-      }
+      const itemsList = interaction.user.tradeItems && interaction.user.tradeItems.length > 0 
+        ? formatItemsList(interaction.user.tradeItems)
+        : 'No items selected';
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2698,10 +2698,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.offerTradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.offerTradeItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2734,10 +2731,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.inventoryItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.inventoryItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2778,10 +2772,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.tradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.tradeItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2823,10 +2814,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.offerTradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.offerTradeItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2866,10 +2854,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.inventoryItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.inventoryItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -2907,10 +2892,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.giveawayItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsList = formatItemsList(interaction.user.giveawayItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
@@ -3570,14 +3552,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.giveawayItems.forEach(item => {
-        if (item.name === 'Diamonds') {
-          itemsList += `💎 **Diamonds** (**x${formatBid(item.quantity)}**)\n`;
-        } else {
-          itemsList += `${item.name} x${item.quantity}\n`;
-        }
-      });
+      const itemsList = formatItemsList(interaction.user.giveawayItems);
 
       await interaction.reply({ 
         content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
