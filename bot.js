@@ -121,7 +121,7 @@ const itemEmojis = {
 
 // Helper functions
 function getItemEmoji(itemName) {
-  return itemEmojis[itemName] || '';
+  return itemEmojis[itemName] || undefined;
 }
 
 function formatItemName(itemName) {
