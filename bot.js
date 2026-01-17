@@ -120,6 +120,11 @@ const itemEmojis = {
   'JellyEgg': '<:JellyEgg:1462107816234979338>',
   'BlackHoleEgg': '<:BlackHoleEgg:1462107779081961483>',
   //'UnicornEgg': '<:UnicornEgg:0000000000000000000>',
+
+  // Gifts
+  'LikeGoalLootbox': '<:LikeGoalLootbox:1462108111383957833>',
+  '2026LootBox': '<:2026LootBox:1462114273827491883>',
+  'CastleLootbox': '<:CastleLootbox:1462120075762077716>',
 };
 
 // Helper functions
@@ -1179,6 +1184,11 @@ client.on('interactionCreate', async (interaction) => {
       const messageId = interaction.message.id;
       const giveaway = giveaways.get(messageId);
       if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', ephemeral: true });
+
+      // Check if user is the giveaway host
+      if (giveaway.host.id === interaction.user.id) {
+        return interaction.reply({ content: '❌ Você não pode entrar em seu próprio giveaway!', ephemeral: true });
+      }
 
       // Check if user already entered
       const alreadyEntered = giveaway.entries.some(entry => entry.user.id === interaction.user.id);
@@ -3251,6 +3261,11 @@ client.on('interactionCreate', async (interaction) => {
       const trade = trades.get(messageId);
       if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
 
+      // Check if user is the trade host
+      if (trade.host.id === interaction.user.id) {
+        return interaction.reply({ content: '❌ Você não pode fazer uma oferta em seu próprio trade!', flags: 64 });
+      }
+
       // Add offer to trade
       trade.offers.push({
         user: interaction.user,
@@ -3275,6 +3290,11 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'bid_modal') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return interaction.reply({ content: 'No auction running.', ephemeral: true });
+
+      // Check if user is the auction host
+      if (auction.host.id === interaction.user.id) {
+        return interaction.reply({ content: '❌ Você não pode fazer um bid em seu próprio leilão!', ephemeral: true });
+      }
 
       const diamondsStr = interaction.fields.getTextInputValue('diamonds');
       const items = interaction.fields.getTextInputValue('items') || '';
