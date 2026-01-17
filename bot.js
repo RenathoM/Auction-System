@@ -22,15 +22,15 @@ const giveaways = new Map(); // messageId -> { host, items: [{name, quantity}], 
 // Item categories for trades
 const itemCategories = {
   huges: {
-    'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeGoldenBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
-    'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeGoldenSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeGoldenSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
-    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeGoldenIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeGoldenIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
-    'Jelly Huges': ['HugeJellyDragon', 'HugeGoldenJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeGoldenJellyKitsune', 'HugeRainbowJellyKitsune'],
-    'Blazing Huges': ['HugeBlazingShark', 'HugeGoldenBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeGoldenBlazingBat', 'HugeRainbowBlazingBat'],
-    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat'],
-    'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeGoldenPresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
+    'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
+    'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
+    'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
+    'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
+    'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
+    'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
+    'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg'],
