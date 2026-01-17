@@ -362,7 +362,6 @@ function formatBid(num) {
   }
   return num.toString();
 }
-
 function formatHugeName(name) {
   // Convert HugeBlackHoleAngelus to Huge Black Hole Angelus
   if (!name.startsWith('Huge')) return name;
@@ -371,6 +370,54 @@ function formatHugeName(name) {
   const withoutHuge = name.substring(4);
   const words = withoutHuge.split(/(?=[A-Z])/);
   return 'Huge ' + words.join(' ');
+}
+
+function consolidateItems(items) {
+  // Merge duplicate items and sum quantities
+  const consolidated = {};
+  items.forEach(item => {
+    if (consolidated[item.name]) {
+      consolidated[item.name] += item.quantity;
+    } else {
+      consolidated[item.name] = item.quantity;
+    }
+  });
+  
+  // Return as array of objects
+  return Object.entries(consolidated).map(([name, quantity]) => ({ name, quantity }));
+}
+
+function formatItemsList(items) {
+  // Consolidate items and format for display
+  const consolidated = consolidateItems(items);
+  let itemsList = '';
+  consolidated.forEach(item => {
+    itemsList += `**${item.name}** x**${item.quantity}**\n`;
+  });
+  return itemsList;
+}
+
+function createItemsEmbed(items) {
+  // Create embed with items and their emojis
+  const consolidated = consolidateItems(items);
+  
+  let itemsDescription = '';
+  consolidated.forEach(item => {
+    const emoji = hugeImages[item.name] || '';
+    const formattedName = formatHugeName(item.name);
+    if (emoji) {
+      itemsDescription += `${emoji} **${formattedName}** x**${item.quantity}**\n`;
+    } else {
+      itemsDescription += `**${item.name}** x**${item.quantity}**\n`;
+    }
+  });
+  
+  const embed = new EmbedBuilder()
+    .setTitle('📦 Selected Items')
+    .setDescription(itemsDescription || 'No items selected')
+    .setColor(0x00ff00);
+  
+  return embed;
 }
 
 function formatItemDisplay(item) {
@@ -1763,13 +1810,11 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.inventoryItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
+      const itemsEmbed = createItemsEmbed(interaction.user.inventoryItems);
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        content: `What would you like to do?`,
+        embeds: [itemsEmbed],
         components: [row], 
         flags: 64 
       });
@@ -1806,26 +1851,11 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.tradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
-
-      // Create embeds for items with emojis
-      const embeds = [];
-      selectedItems.forEach(item => {
-        if (hugeImages[item]) {
-          const embed = new EmbedBuilder()
-            .setTitle(item)
-            .setDescription(hugeImages[item])
-            .setColor(0x00ff00);
-          embeds.push(embed);
-        }
-      });
+      const itemsEmbed = createItemsEmbed(interaction.user.tradeItems);
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        embeds: embeds.length > 0 ? embeds : undefined,
+        content: `What would you like to do?`,
+        embeds: [itemsEmbed],
         components: [row], 
         flags: 64 
       });
@@ -1863,26 +1893,11 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.offerTradeItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
-
-      // Create embeds for items with emojis
-      const embeds = [];
-      selectedItems.forEach(item => {
-        if (hugeImages[item]) {
-          const embed = new EmbedBuilder()
-            .setTitle(item)
-            .setDescription(hugeImages[item])
-            .setColor(0x00ff00);
-          embeds.push(embed);
-        }
-      });
+      const itemsEmbed = createItemsEmbed(interaction.user.offerTradeItems);
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        embeds: embeds.length > 0 ? embeds : undefined,
+        content: `What would you like to do?`,
+        embeds: [itemsEmbed],
         components: [row], 
         flags: 64 
       });
@@ -1918,26 +1933,11 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      let itemsList = '';
-      interaction.user.inventoryItems.forEach(item => {
-        itemsList += `${item.name} x${item.quantity}\n`;
-      });
-
-      // Create embeds for items with emojis
-      const embeds = [];
-      selectedItems.forEach(item => {
-        if (hugeImages[item]) {
-          const embed = new EmbedBuilder()
-            .setTitle(item)
-            .setDescription(hugeImages[item])
-            .setColor(0x00ff00);
-          embeds.push(embed);
-        }
-      });
+      const itemsEmbed = createItemsEmbed(interaction.user.inventoryItems);
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        embeds: embeds.length > 0 ? embeds : undefined,
+        content: `What would you like to do?`,
+        embeds: [itemsEmbed],
         components: [row], 
         flags: 64 
       });
