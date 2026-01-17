@@ -3536,7 +3536,7 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.giveawayItems = [];
       }
       
-      interaction.user.giveawayItems.push({ name: 'Diamonds', quantity: diamonds });
+      interaction.user.giveawayItems.push({ name: '💎 Diamonds', quantity: diamonds });
 
       // Show continue select
       const { StringSelectMenuBuilder } = require('discord.js');
