@@ -3558,7 +3558,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         // Send proof to records channel
-        const proofChannelId = '1461849894615646309';
+        const proofChannelId = '1462197194646880368';
         const proofChannel = interaction.guild.channels.cache.get(proofChannelId);
 
         if (proofChannel) {
