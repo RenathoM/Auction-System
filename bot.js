@@ -1160,13 +1160,25 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ content: 'You are already entered in this giveaway!', ephemeral: true });
       }
 
-      // Add entry
-      giveaway.entries.push({
-        user: interaction.user,
-        enteredAt: Date.now()
-      });
+      // Check if user has special role for x2 entries
+      const specialRoleId = '1461534174589485197';
+      const hasSpecialRole = interaction.member.roles.cache.has(specialRoleId);
+      const entryCount = hasSpecialRole ? 2 : 1;
 
-      await interaction.reply({ content: `✅ You have entered the giveaway! Total entries: ${giveaway.entries.length}`, ephemeral: true });
+      // Add entry(ies)
+      for (let i = 0; i < entryCount; i++) {
+        giveaway.entries.push({
+          user: interaction.user,
+          enteredAt: Date.now(),
+          multiplier: hasSpecialRole ? 2 : 1
+        });
+      }
+
+      const message = hasSpecialRole 
+        ? `✅ You have entered the giveaway with **x2 entries** due to your special role! Total entries: ${giveaway.entries.length}`
+        : `✅ You have entered the giveaway! Total entries: ${giveaway.entries.length}`;
+
+      await interaction.reply({ content: message, ephemeral: true });
     }
 
     if (interaction.customId.startsWith('giveaway_entries_')) {
@@ -1177,7 +1189,26 @@ client.on('interactionCreate', async (interaction) => {
       // Create entries list
       let entriesList = 'No entries yet.';
       if (giveaway.entries.length > 0) {
-        entriesList = giveaway.entries.map((entry, idx) => `${idx + 1}. ${entry.user.displayName || entry.user.username}`).join('\n');
+        // Group entries by user to show multipliers
+        const userEntries = {};
+        giveaway.entries.forEach((entry) => {
+          if (!userEntries[entry.user.id]) {
+            userEntries[entry.user.id] = {
+              user: entry.user,
+              count: 0,
+              multiplier: entry.multiplier || 1
+            };
+          }
+          userEntries[entry.user.id].count++;
+        });
+        
+        entriesList = Object.values(userEntries)
+          .map((data, idx) => {
+            const userDisplay = data.user.displayName || data.user.username;
+            const multiplierText = data.multiplier === 2 ? ' (x2)' : '';
+            return `${idx + 1}. ${userDisplay}${multiplierText}`;
+          })
+          .join('\n');
       }
 
       const entriesEmbed = new EmbedBuilder()
