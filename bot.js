@@ -1192,7 +1192,7 @@ client.on('interactionCreate', async (interaction) => {
 
       // Check if user is the giveaway host
       if (giveaway.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ Você não pode entrar em seu próprio giveaway!', ephemeral: true });
+        return interaction.reply({ content: '❌ You can\'t enter your own raffle!', ephemeral: true });
       }
 
       // Check if user already entered
