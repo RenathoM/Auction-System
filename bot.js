@@ -11,10 +11,10 @@ const versionFile = path.join(__dirname, 'version.json');
 const dataFile = path.join(__dirname, 'data.json');
 
 let versions = {
-  auction: '1.1.2',
-  trade: '1.1.3',
-  inventory: '1.1.0',
-  bid: '1.1.2'
+  auction: '1.1.5',
+  trade: '1.1.4',
+  inventory: '1.1.1',
+  bid: '1.1.5'
 };
 
 // Load versions from file
@@ -574,7 +574,17 @@ client.once('clientReady', async () => {
     },
     {
       name: 'clearbotmessages',
-      description: 'Delete all bot messages in this channel (admin only)'
+      description: 'Delete bot messages in this channel (admin only)',
+      options: [
+        {
+          name: 'quantidade',
+          type: ApplicationCommandOptionType.Integer,
+          description: 'Number of messages to delete (optional, default: all)',
+          required: false,
+          minValue: 1,
+          maxValue: 1000
+        }
+      ]
     },
   ];
 
@@ -1051,6 +1061,8 @@ client.on('interactionCreate', async (interaction) => {
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
       if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: 64 });
 
+      const maxMessages = interaction.options.getInteger('quantidade') || null;
+
       try {
         await interaction.deferReply({ flags: 64 });
 
@@ -1068,6 +1080,9 @@ client.on('interactionCreate', async (interaction) => {
           if (messages.size === 0) break;
 
           for (const message of messages.values()) {
+            // Stop if we've reached the limit
+            if (maxMessages && deletedCount >= maxMessages) break;
+
             if (message.author.id === client.user.id) {
               try {
                 await message.delete();
@@ -1078,11 +1093,15 @@ client.on('interactionCreate', async (interaction) => {
             }
           }
 
+          // Break if we've reached the limit
+          if (maxMessages && deletedCount >= maxMessages) break;
+
           lastMessageId = messages.last().id;
         }
 
+        const quantidadeText = maxMessages ? `de até ${maxMessages}` : 'todas as';
         await interaction.editReply({ 
-          content: `✅ Deletadas ${deletedCount} mensagem(ns) do bot neste canal.`
+          content: `✅ Deletadas ${deletedCount} ${quantidadeText} mensagem(ns) do bot neste canal.`
         });
       } catch (error) {
         console.error('Error in clearbotmessages:', error);
