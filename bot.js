@@ -1303,7 +1303,8 @@ client.on('interactionCreate', async (interaction) => {
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+          { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+          { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
         ]);
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -2028,7 +2029,8 @@ client.on('interactionCreate', async (interaction) => {
             { label: 'Huges', value: 'huges', emoji: '🔥' },
             { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
             { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-            { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+            { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+            { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
           ]);
 
         const row = new ActionRowBuilder().addComponents(categorySelect);
@@ -2238,6 +2240,25 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'giveaway_category_select') {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
+      
+      if (category === 'diamonds') {
+        // Show modal for diamond quantity
+        const diamondsModal = new ModalBuilder()
+          .setCustomId('giveaway_diamonds_modal')
+          .setTitle('Add Diamonds');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('gwa_diamonds_amount')
+          .setLabel('Diamond Amount')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Enter amount of diamonds')
+          .setRequired(true);
+
+        const row = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row);
+        await interaction.showModal(diamondsModal);
+        return;
+      }
       
       if (category === 'huges') {
         const subcategorySelect = new StringSelectMenuBuilder()
@@ -2596,6 +2617,41 @@ client.on('interactionCreate', async (interaction) => {
         flags: 64 
       });
       return;
+    }
+
+    if (interaction.customId === 'giveaway_diamonds_modal') {
+      const diamondsStr = interaction.fields.getTextInputValue('gwa_diamonds_amount');
+      const diamonds = parseBid(diamondsStr);
+
+      if (!interaction.user.giveawayItems) {
+        interaction.user.giveawayItems = [];
+      }
+
+      interaction.user.giveawayItems.push({ name: '💎 Diamonds', quantity: diamonds });
+
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`giveaway_continue_select`)
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Create Giveaway', value: 'create_giveaway' },
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.giveawayItems.forEach(item => {
+        itemsList += `${item.name} x${item.quantity}\n`;
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
     }
 
     if (interaction.customId === 'giveaway_item_quantities_modal') {
