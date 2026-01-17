@@ -1126,13 +1126,8 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`**Winner:** ${winner.user}`)
           .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
 
-        // List items
-        let itemsText = 'None';
-        if (giveaway.items.length > 0) {
-          itemsText = giveaway.items.map(item => 
-            typeof item === 'object' ? `${item.name} x${item.quantity}` : item
-          ).join('\n');
-        }
+        // Format items with emojis and quantities
+        const itemsText = formatItemsText(giveaway.items);
 
         embed.addFields({
           name: 'Giveaway Items',
@@ -1147,7 +1142,15 @@ client.on('interactionCreate', async (interaction) => {
         });
 
         if (channel) {
-          await channel.send({ embeds: [embed] });
+          // Add upload proof button
+          const uploadProofButton = new ButtonBuilder()
+            .setCustomId(`upload_proof_giveaway_${messageId}`)
+            .setLabel('Upload Proof Image')
+            .setStyle(ButtonStyle.Primary);
+
+          const row = new ActionRowBuilder().addComponents(uploadProofButton);
+
+          await channel.send({ embeds: [embed], components: [row] });
           await channel.send(`🎉 Congratulations ${winner.user}! You won the giveaway!`);
         }
       }
@@ -1444,6 +1447,27 @@ client.on('interactionCreate', async (interaction) => {
         .setLabel('Description (optional)')
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder('Add any notes about this auction...')
+        .setRequired(false);
+
+      const row = new ActionRowBuilder().addComponents(descriptionInput);
+      modal.addComponents(row);
+
+      await interaction.showModal(modal);
+    }
+
+    if (interaction.customId.startsWith('upload_proof_giveaway_')) {
+      const messageId = interaction.customId.replace('upload_proof_giveaway_', '');
+
+      // Show modal for image description
+      const modal = new ModalBuilder()
+        .setCustomId(`proof_image_modal_giveaway_${messageId}`)
+        .setTitle('Upload Proof Image');
+
+      const descriptionInput = new TextInputBuilder()
+        .setCustomId('proof_description')
+        .setLabel('Description (optional)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Add any notes about this giveaway...')
         .setRequired(false);
 
       const row = new ActionRowBuilder().addComponents(descriptionInput);
@@ -2841,13 +2865,8 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription(`**Winner:** ${winner.user}`)
             .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
 
-          // List items
-          let itemsText = 'None';
-          if (giveaway.items.length > 0) {
-            itemsText = giveaway.items.map(item => 
-              typeof item === 'object' ? `${item.name} x${item.quantity}` : item
-            ).join('\n');
-          }
+          // Format items with emojis and quantities
+          const itemsText = formatItemsText(giveaway.items);
 
           winnerEmbed.addFields({
             name: 'Giveaway Items',
@@ -2861,7 +2880,15 @@ client.on('interactionCreate', async (interaction) => {
             inline: true
           });
 
-          await channel.send({ embeds: [winnerEmbed] });
+          // Add upload proof button
+          const uploadProofButton = new ButtonBuilder()
+            .setCustomId(`upload_proof_giveaway_${message.id}`)
+            .setLabel('Upload Proof Image')
+            .setStyle(ButtonStyle.Primary);
+
+          const row = new ActionRowBuilder().addComponents(uploadProofButton);
+
+          await channel.send({ embeds: [winnerEmbed], components: [row] });
           await channel.send(`🎉 Congratulations ${winner.user}! You won the giveaway!`);
         }
 
@@ -3194,6 +3221,27 @@ client.on('interactionCreate', async (interaction) => {
         tradeMessageId: null,
         description: description,
         type: 'auction'
+      };
+    }
+
+    if (interaction.customId.startsWith('proof_image_modal_giveaway_')) {
+      const messageId = interaction.customId.replace('proof_image_modal_giveaway_', '');
+      const description = interaction.fields.getTextInputValue('proof_description') || '';
+      const giveaway = giveaways.get(messageId);
+
+      if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', ephemeral: true });
+
+      // Show instruction
+      await interaction.reply({
+        content: '📸 Please attach the proof image to your next message in this channel.\n\nAfter you send the image, the proof will be automatically forwarded to the records channel.',
+        ephemeral: false
+      });
+
+      // Store waiting state
+      interaction.user.waitingForProof = {
+        giveawayMessageId: messageId,
+        description: description,
+        type: 'giveaway'
       };
     }
   }
