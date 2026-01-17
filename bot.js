@@ -40,6 +40,7 @@ const itemCategories = {
 
 // Giveaway item categories (for /setupgiveaway)
 const giveawayItemCategories = {
+  diamonds: [],
   huges: {
     'Black Hole Huges': ['HugeBlackHoleAngelus', 'HugeRainbowBlackHoleAngelus'],
     'Snow Globe Huges': ['HugeSnowGlobeHamster', 'HugeRainbowSnowGlobeHamster', 'HugeSnowGlobeCat', 'HugeRainbowSnowGlobeCat'],
@@ -1344,6 +1345,7 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId('giveaway_category_select')
         .setPlaceholder('Select an item category')
         .addOptions([
+          { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
           { label: 'Huges', value: 'huges', emoji: '🔥' },
           { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
           { label: 'Eggs', value: 'eggs', emoji: '🥚' },
@@ -2048,6 +2050,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('giveaway_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
+            { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
             { label: 'Huges', value: 'huges', emoji: '🔥' },
             { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
             { label: 'Eggs', value: 'eggs', emoji: '🥚' },
@@ -2261,6 +2264,26 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'giveaway_category_select') {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
+      
+      if (category === 'diamonds') {
+        // Show modal for diamonds input
+        const diamondsModal = new ModalBuilder()
+          .setCustomId('giveaway_diamonds_modal')
+          .setTitle('Add Diamonds to Giveaway');
+
+        const diamondsInput = new TextInputBuilder()
+          .setCustomId('giveaway_diamonds_amount')
+          .setLabel('Amount of Diamonds')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g., 5000, 10K, 1M')
+          .setRequired(true);
+
+        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+        diamondsModal.addComponents(row1);
+
+        await interaction.showModal(diamondsModal);
+        return;
+      }
       
       if (category === 'huges') {
         const subcategorySelect = new StringSelectMenuBuilder()
@@ -3119,6 +3142,51 @@ client.on('interactionCreate', async (interaction) => {
         description: description,
         type: 'auction'
       };
+    }
+
+    if (interaction.customId === 'giveaway_diamonds_modal') {
+      const diamondsStr = interaction.fields.getTextInputValue('giveaway_diamonds_amount');
+      const diamonds = parseBid(diamondsStr);
+
+      if (diamonds <= 0) {
+        return interaction.reply({ content: 'Please enter a valid amount of diamonds.', ephemeral: true });
+      }
+
+      // Store diamonds as item
+      if (!interaction.user.giveawayItems) {
+        interaction.user.giveawayItems = [];
+      }
+      
+      interaction.user.giveawayItems.push({ name: 'Diamonds', quantity: diamonds });
+
+      // Show continue select
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId('giveaway_continue_select')
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Create Giveaway', value: 'create_giveaway' },
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      
+      let itemsList = '';
+      interaction.user.giveawayItems.forEach(item => {
+        if (item.name === 'Diamonds') {
+          itemsList += `💎 **Diamonds** (**x${formatBid(item.quantity)}**)\n`;
+        } else {
+          itemsList += `${item.name} x${item.quantity}\n`;
+        }
+      });
+
+      await interaction.reply({ 
+        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
+        components: [row], 
+        flags: 64 
+      });
     }
   }
 });
