@@ -3064,7 +3064,29 @@ client.on('interactionCreate', async (interaction) => {
   embed.addFields({ name: 'Looking For', value: lookingFor, inline: true });
 
   const now = new Date();
-  const timeStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} at ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+// Opções para formatar no fuso horário correto e garantir o formato DD/MM/YYYY
+const options = {
+  timeZone: 'Etc/GMT+5', // GMT-5 é representado como GMT+5 no padrão IANA
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false
+};
+
+  const formatter = new Intl.DateTimeFormat('pt-BR', options);
+  const parts = formatter.formatToParts(now);
+
+  // Mapeando as partes para reconstruir sua string exatamente no formato desejado
+  const d = parts.find(p => p.type === 'day').value;
+  const m = parts.find(p => p.type === 'month').value;
+  const y = parts.find(p => p.type === 'year').value;
+  const hr = parts.find(p => p.type === 'hour').value;
+  const min = parts.find(p => p.type === 'minute').value;
+
+  const timeStr = `${d}/${m}/${y} at ${hr}:${min}`;
   embed.addFields({ name: 'Last Edited', value: timeStr, inline: false });
 
   // Botões e envio...
