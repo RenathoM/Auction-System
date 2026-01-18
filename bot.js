@@ -685,7 +685,7 @@ client.on('messageCreate', async (message) => {
       // Create proof embed for auction
       proofEmbed = new EmbedBuilder()
         .setTitle('🎪 Auction Proof')
-        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${auctionData.diamonds} 💎\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || 'No description provided'}`)
         .setColor(0x00ff00)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.username}` })
@@ -742,9 +742,14 @@ client.on('messageCreate', async (message) => {
     if (auction.model === 'items' && diamonds > 0) return message.reply('This auction is offers only.');
     if (auction.model === 'diamonds' && items) return message.reply('This auction is diamonds only.');
 
+    // Additional check for 'both' model: if there's a previous bid with only diamonds, don't allow adding diamonds
+    if (auction.model === 'both' && diamonds > 0 && auction.bids.some(bid => bid.diamonds > 0 && !bid.items)) {
+      return message.reply('Since there\'s already a bid with only diamonds, you can only add items to your bid.');
+    }
+
     // Add bid
     auction.bids.push({ user: message.author, diamonds, items });
-    message.reply(`Bid placed: ${diamonds} 💎${items ? ` and ${items}` : ''}`);
+    message.reply(`Bid placed: ${formatBid(diamonds)} 💎${items ? ` and ${items}` : ''}`);
   }
 });
 
@@ -3959,6 +3964,11 @@ async function getRobloxAvatarUrl(userId) {
       if (auction.model === 'diamonds' && diamonds === 0) return interaction.reply({ content: 'Please enter diamonds.', ephemeral: true });
       if (auction.model === 'items' && !items) return interaction.reply({ content: 'Please enter an offer.', ephemeral: true });
 
+      // Additional check for 'both' model: if there's a previous bid with only diamonds, don't allow adding diamonds
+      if (auction.model === 'both' && diamonds > 0 && auction.bids.some(bid => bid.diamonds > 0 && !bid.items)) {
+        return interaction.reply({ content: 'Since there\'s already a bid with only diamonds, you can only add items to your bid.', ephemeral: true });
+      }
+
       // Check if bid is higher than current max
       const maxBid = auction.bids.length > 0 ? Math.max(...auction.bids.map(b => b.diamonds)) : auction.startingPrice;
       if (auction.model !== 'items' && diamonds <= maxBid) return interaction.reply({ content: `Your bid must be higher than the current highest bid of ${maxBid} 💎.`, ephemeral: true });
@@ -4316,6 +4326,21 @@ async function endAuction(channel) {
   // Find winner: highest diamonds, if tie, first bid
   auction.bids.sort((a, b) => b.diamonds - a.diamonds || auction.bids.indexOf(a) - auction.bids.indexOf(b));
   const winner = auction.bids[0];
+
+  // Update the active embed with winner and red color
+  try {
+    const message = await channel.messages.fetch(auction.messageId);
+    const finalEmbed = new EmbedBuilder()
+      .setTitle(auction.title)
+      .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Winning Bid:** ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}\n**Winner:** ${winner.user}\n**Hosted by:** ${auction.host}`)
+      .setColor(0xff0000) // Red color
+      .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+      .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+    await message.edit({ embeds: [finalEmbed], components: [] }); // Remove buttons
+  } catch (e) {
+    console.error('Error updating auction embed:', e);
+  }
 
   const embed = new EmbedBuilder()
     .setTitle('Auction Ended!')
