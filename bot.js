@@ -199,7 +199,7 @@ const itemEmojis = {
   'SnowGlobeEgg': '<:SnowGlobeEgg:1462562538792161300>',
   'JellyEgg': '<:JellyEgg:1462562751963463772>',
   'BlackHoleEgg': '<:BlackHoleEgg:1462562753431736474>',
-  'UnicornEgg': '1462563572180713585',
+  'UnicornEgg': '<:UnicornEgg:1462563572180713585>',
 
   // Gifts
   'LikeGoalLootbox': '<:LikeGoalLootbox:1462562535105495213>',
