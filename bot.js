@@ -1883,7 +1883,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Select Quantities');
 
       let inputs = [];
-      selectedItems.slice(0, 25).forEach((item, index) => {
+      selectedItems.slice(0, 5).forEach((item, index) => {
         const input = new TextInputBuilder()
           .setCustomId(`qty_${index}`)
           .setLabel(`${item} quantity`)
@@ -1980,7 +1980,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Select Quantities');
 
       let inputs = [];
-      selectedItems.slice(0, 25).forEach((item, index) => {
+      selectedItems.slice(0, 5).forEach((item, index) => {
         const input = new TextInputBuilder()
           .setCustomId(`offer_qty_${index}`)
           .setLabel(`${item} quantity`)
@@ -2183,12 +2183,12 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('inventory_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
-          { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
-          { label: 'Huges', value: 'huges', emoji: '🔥' },
-          { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
-          { label: 'Eggs', value: 'eggs', emoji: '🥚' },
-          { label: 'Gifts', value: 'gifts', emoji: '🎁' }
-        ]);
+	    { label: 'Diamonds', value: 'diamonds', emoji: '💎' }
+            { label: 'Huges', value: 'huges', emoji: '🔥' },
+            { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+            { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+            { label: 'Gifts', value: 'gifts', emoji: '🎁' },
+          ]);
 
         const row = new ActionRowBuilder().addComponents(categorySelect);
         await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
@@ -2501,7 +2501,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Select Quantities');
 
       let inputs = [];
-      selectedItems.slice(0, 25).forEach((item, index) => {
+      selectedItems.slice(0, 5).forEach((item, index) => {
         const input = new TextInputBuilder()
           .setCustomId(`inv_qty_${index}`)
           .setLabel(`${item} quantity`)
@@ -2603,7 +2603,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Select Quantities');
 
       let inputs = [];
-      selectedItems.slice(0, 25).forEach((item, index) => {
+      selectedItems.slice(0, 5).forEach((item, index) => {
         const input = new TextInputBuilder()
           .setCustomId(`gwa_qty_${index}`)
           .setLabel(`${item} quantity`)
