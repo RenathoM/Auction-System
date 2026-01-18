@@ -4,8 +4,17 @@ global.ReadableStream = ReadableStream;
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
+const redis = require('redis');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+
+// Redis client
+const redisClient = redis.createClient({
+  url: 'redis://default:GXpaeZBLEimkAjhcFwHsXfbyFbkpdMab@switchback.proxy.rlwy.net:39315'
+});
+
+redisClient.on('error', (err) => console.error('Redis Client Error', err));
+redisClient.connect();
 
 let redirectChannelId = config.defaultAuctionChannelId || null;
 let redirectTradeChannelId = config.defaultTradeChannelId || null;
@@ -29,11 +38,10 @@ const itemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElectricUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg', 'UnicornEgg'],
@@ -49,11 +57,10 @@ const giveawayItemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElecticUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg', 'UnicornEgg'],
@@ -63,15 +70,6 @@ const giveawayItemCategories = {
 // Item emojis mapping - customize with your server emojis
 const itemEmojis = {
   //Huges
-
-
-  
-  'HugeElectricUnicorn': '<:HugeStormAgony:1462294295057793186>',
-  'HugeRainbowElectricUnicorn': '📦',
-  'HugeStormAgony': '<:HugeStormAgony:1462294256218673515>',
-  'HugeGoldenStormAgony': '📦',
-  'HugeRainbowStormAgony': '📦',
-	
   'HugeBlackHoleAngelus': '<:HugeBlackHoleAngelus:1461868865758695646>',
   'HugeRainbowBlackHoleAngelus': '📦',
   'HugeSnowGlobeHamster': '<:HugeSnowGlobeHamster:1461512580970618881>',
@@ -193,48 +191,179 @@ function formatItemsList(items) {
 }
 
 // Save data every 5 minutes
-setInterval(() => {
-  saveData();
+setInterval(async () => {
+  await saveData();
 }, 5 * 60 * 1000);
 
-function saveData() {
-  const data = {
-    redirectChannelId,
-    redirectTradeChannelId,
-    redirectInventoryChannelId,
-    redirectGiveawayChannelId,
-    inventories: Array.from(inventories.entries())
-  };
-  
-  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+async function saveData() {
+  try {
+    // Save inventories
+    const inventoriesData = JSON.stringify(Array.from(inventories.entries()));
+    redisClient.set('INVENTORYSAVES', inventoriesData);
+
+    // Save trades
+    const tradesData = JSON.stringify(Array.from(trades.entries()));
+    redisClient.set('TRADESAVES', tradesData);
+
+    // Save giveaways
+    const giveawaysData = JSON.stringify(Array.from(giveaways.entries()));
+    redisClient.set('GIVEAWAYSAVES', giveawaysData);
+
+    // Save auctions
+    const auctionsData = JSON.stringify(Array.from(auctions.entries()));
+    redisClient.set('AUCTIONSAVES', auctionsData);
+
+    // Save finished auctions
+    const finishedAuctionsData = JSON.stringify(Array.from(finishedAuctions.entries()));
+    redisClient.set('FINISHEDAUCTIONSAVES', finishedAuctionsData);
+
+    // Save finished giveaways
+    const finishedGiveawaysData = JSON.stringify(Array.from(finishedGiveaways.entries()));
+    redisClient.set('FINISHEDGIVEAWAYSAVES', finishedGiveawaysData);
+
+    // Save user counts
+    const userTradeCountData = JSON.stringify(Array.from(userTradeCount.entries()));
+    redisClient.set('USERTRADECOUNTSAVES', userTradeCountData);
+
+    const userGiveawayCountData = JSON.stringify(Array.from(userGiveawayCount.entries()));
+    redisClient.set('USERGIVEAWAYCOUNTSAVES', userGiveawayCountData);
+
+    // Save redirects
+    const redirectsData = JSON.stringify({
+      redirectChannelId,
+      redirectTradeChannelId,
+      redirectInventoryChannelId,
+      redirectGiveawayChannelId
+    });
+    redisClient.set('REDIRECTSAVES', redirectsData);
+
+    console.log('Data saved to Redis successfully');
+
+    // Send detailed save report to admin channel
+    try {
+      const adminChannelId = '1461719381619904524';
+      const channel = client.channels.cache.get(adminChannelId);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('💾 Save System - Report')
+          .setColor('#00FF00')
+          .setTimestamp()
+          .setDescription('**Data successfully saved to Railway Redis**')
+          .addFields(
+            { name: '📦 Inventories', value: `${inventories.size} inventories saved`, inline: true },
+            { name: '🔄 Trades', value: `${trades.size} active trades saved`, inline: true },
+            { name: '🎉 Giveaways', value: `${giveaways.size} active giveaways saved`, inline: true },
+            { name: '🏆 Auctions', value: `${auctions.size} active auctions saved`, inline: true },
+            { name: '✅ Finished Auctions', value: `${finishedAuctions.size} finished auctions saved`, inline: true },
+            { name: '🎁 Finished Giveaways', value: `${finishedGiveaways.size} finished giveaways saved`, inline: true },
+            { name: '👥 Trade Counters', value: `${userTradeCount.size} users with trade counters`, inline: true },
+            { name: '🎊 Giveaway Counters', value: `${userGiveawayCount.size} users with giveaway counters`, inline: true },
+            { name: '🔧 Settings', value: `Redirects saved`, inline: true }
+          )
+          .setFooter({ text: 'Next automatic save in 5 minutes' });
+
+        await channel.send({ embeds: [embed] });
+      }
+    } catch (embedError) {
+      console.error('Error sending save report embed:', embedError);
+    }
+  } catch (error) {
+    console.error('Error saving data to Redis:', error);
+  }
 }
 
-function loadData() {
+async function loadData() {
   try {
-    if (fs.existsSync('data.json')) {
-      const data = JSON.parse(fs.readFileSync('data.json', 'utf-8'));
-      
-      if (data.redirectChannelId) redirectChannelId = data.redirectChannelId;
-      if (data.redirectTradeChannelId) redirectTradeChannelId = data.redirectTradeChannelId;
-      if (data.redirectInventoryChannelId) redirectInventoryChannelId = data.redirectInventoryChannelId;
-      if (data.redirectGiveawayChannelId) redirectGiveawayChannelId = data.redirectGiveawayChannelId;
-      
-      if (data.inventories) {
-        data.inventories.forEach(([key, value]) => {
-          inventories.set(key, value);
-        });
-      }
-      
-      console.log('Data loaded successfully');
+    // Load inventories
+    const inventoriesData = await redisClient.get('INVENTORYSAVES');
+    if (inventoriesData) {
+      const parsed = JSON.parse(inventoriesData);
+      parsed.forEach(([key, value]) => {
+        inventories.set(key, value);
+      });
     }
+
+    // Load trades
+    const tradesData = await redisClient.get('TRADESAVES');
+    if (tradesData) {
+      const parsed = JSON.parse(tradesData);
+      parsed.forEach(([key, value]) => {
+        trades.set(key, value);
+      });
+    }
+
+    // Load giveaways
+    const giveawaysData = await redisClient.get('GIVEAWAYSAVES');
+    if (giveawaysData) {
+      const parsed = JSON.parse(giveawaysData);
+      parsed.forEach(([key, value]) => {
+        giveaways.set(key, value);
+      });
+    }
+
+    // Load auctions
+    const auctionsData = await redisClient.get('AUCTIONSAVES');
+    if (auctionsData) {
+      const parsed = JSON.parse(auctionsData);
+      parsed.forEach(([key, value]) => {
+        auctions.set(key, value);
+      });
+    }
+
+    // Load finished auctions
+    const finishedAuctionsData = await redisClient.get('FINISHEDAUCTIONSAVES');
+    if (finishedAuctionsData) {
+      const parsed = JSON.parse(finishedAuctionsData);
+      parsed.forEach(([key, value]) => {
+        finishedAuctions.set(key, value);
+      });
+    }
+
+    // Load finished giveaways
+    const finishedGiveawaysData = await redisClient.get('FINISHEDGIVEAWAYSAVES');
+    if (finishedGiveawaysData) {
+      const parsed = JSON.parse(finishedGiveawaysData);
+      parsed.forEach(([key, value]) => {
+        finishedGiveaways.set(key, value);
+      });
+    }
+
+    // Load user counts
+    const userTradeCountData = await redisClient.get('USERTRADECOUNTSAVES');
+    if (userTradeCountData) {
+      const parsed = JSON.parse(userTradeCountData);
+      parsed.forEach(([key, value]) => {
+        userTradeCount.set(key, value);
+      });
+    }
+
+    const userGiveawayCountData = await redisClient.get('USERGIVEAWAYCOUNTSAVES');
+    if (userGiveawayCountData) {
+      const parsed = JSON.parse(userGiveawayCountData);
+      parsed.forEach(([key, value]) => {
+        userGiveawayCount.set(key, value);
+      });
+    }
+
+    // Load redirects
+    const redirectsData = await redisClient.get('REDIRECTSAVES');
+    if (redirectsData) {
+      const parsed = JSON.parse(redirectsData);
+      if (parsed.redirectChannelId) redirectChannelId = parsed.redirectChannelId;
+      if (parsed.redirectTradeChannelId) redirectTradeChannelId = parsed.redirectTradeChannelId;
+      if (parsed.redirectInventoryChannelId) redirectInventoryChannelId = parsed.redirectInventoryChannelId;
+      if (parsed.redirectGiveawayChannelId) redirectGiveawayChannelId = parsed.redirectGiveawayChannelId;
+    }
+
+    console.log('Data loaded from Redis successfully');
   } catch (e) {
-    console.error('Error loading data:', e);
+    console.error('Error loading data from Redis:', e);
   }
 }
 
 client.once('ready', async () => {
   console.log('Auction Bot is ready!');
-  loadData();
+  await loadData();
 
   // Register slash commands
   const commands = [
@@ -2243,7 +2372,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('inventory_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
-	    { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
+	          { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
             { label: 'Huges', value: 'huges', emoji: '🔥' },
             { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
             { label: 'Eggs', value: 'eggs', emoji: '🥚' },
@@ -2990,23 +3119,23 @@ client.on('interactionCreate', async (interaction) => {
     diamonds = parseBid(diamondsStr);
   }
 
-  // --- LÓGICA DE CONVERSÃO DE USERNAME PARA ID ---
+  // --- USERNAME TO ID CONVERSION LOGIC ---
   let robloxId = null;
   if (robloxInput) {
-    // Se o input for apenas números, tratamos como ID. Se não, buscamos o ID pelo Nome.
+    // If input is only numbers, treat as ID. If not, search for ID by Name.
     if (!isNaN(robloxInput)) {
       robloxId = robloxInput;
     } else {
-      // Função auxiliar para pegar ID pelo nome (veja abaixo)
+      // Helper function to get ID by name (see below)
       robloxId = await getRobloxId(robloxInput);
     }
   }
 
   const inventoryItems = interaction.user.inventoryItems || [];
   delete interaction.user.inventoryItems;
-  // ... (restante dos seus deletes)
+  // ... (rest of your deletes)
 
-  // Lógica de deletar inventário anterior...
+  // Logic to delete previous inventory...
   const previousInventory = inventories.get(interaction.user.id);
   if (previousInventory) {
     try {
@@ -3023,9 +3152,9 @@ client.on('interactionCreate', async (interaction) => {
     .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
     .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-  // CONFIGURAÇÃO DO AUTHOR (Avatar do Roblox)
+  // AUTHOR CONFIGURATION (Roblox Avatar)
   if (robloxId && robloxId !== 'null' && robloxId !== '' && !isNaN(robloxId)) {
-    // Buscar o avatar do usuário Roblox
+    // Fetch user's Roblox avatar
     const avatarUrl = await getRobloxAvatarUrl(robloxId);
     
     if (avatarUrl) {
@@ -3036,7 +3165,7 @@ client.on('interactionCreate', async (interaction) => {
         iconURL: avatarUrl 
       });
     } else {
-      // Se falhar em pegar o avatar do Roblox, usa o avatar do Discord
+      // If failed to get Roblox avatar, use Discord avatar
       console.log(`Failed to fetch Roblox avatar for ID ${robloxId}, using Discord avatar`);
       embed.setAuthor({ 
         name: interaction.member.displayName, 
@@ -3053,7 +3182,7 @@ client.on('interactionCreate', async (interaction) => {
     });
   }
 
-  // Restante do preenchimento do embed...
+  // Rest of embed filling...
   const itemsText = formatItemsText(inventoryItems);
   embed.addFields({ 
     name: `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : 'None'}`,
@@ -3067,7 +3196,7 @@ client.on('interactionCreate', async (interaction) => {
   const timeStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} at ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
   embed.addFields({ name: 'Last Edited', value: timeStr, inline: false });
 
-  // Botões e envio...
+  // Buttons and sending...
   const updateButton = new ButtonBuilder()
     .setCustomId('inventory_update_button')
     .setLabel('Update Inventory')
@@ -3095,7 +3224,7 @@ client.on('interactionCreate', async (interaction) => {
   inventories.set(interaction.user.id, inventoryData);
 }
 
-// FUNÇÃO AUXILIAR (Coloque fora do evento de interação)
+// HELPER FUNCTION (Place outside interaction event)
 async function getRobloxId(username) {
   try {
     if (!username || username.trim() === '') return null;
@@ -3122,7 +3251,7 @@ async function getRobloxId(username) {
   }
 }
 
-// Função para pegar o avatar do Roblox usando a API oficial
+// Function to get Roblox avatar using official API
 async function getRobloxAvatarUrl(userId) {
   try {
     if (!userId || isNaN(userId)) return null;
@@ -3139,13 +3268,13 @@ async function getRobloxAvatarUrl(userId) {
     
     const data = await response.json();
     
-    // Verificar se a API retornou dados
+    // Check if API returned data
     if (data.data && data.data.length > 0) {
       const avatarData = data.data[0];
       
-      // Verificar se o estado é "Completed" e se há imageUrl
+      // Check if state is "Completed" and if there's imageUrl
       if (avatarData.state === 'Completed' && avatarData.imageUrl) {
-        console.log(`✅ Avatar URL obtido com sucesso para user ${userId}`);
+        console.log(`✅ Avatar URL successfully obtained for user ${userId}`);
         return avatarData.imageUrl;
       } else {
         console.log(`⚠️ Avatar state: ${avatarData.state}`);
@@ -3153,7 +3282,7 @@ async function getRobloxAvatarUrl(userId) {
       }
     }
     
-    console.log(`⚠️ Nenhum dado de avatar retornado pela API`);
+    console.log(`⚠️ No avatar data returned by API`);
     return null;
   } catch (e) {
     console.error('Error fetching Roblox avatar URL:', e.message);
@@ -3490,7 +3619,7 @@ async function getRobloxAvatarUrl(userId) {
 
       // Check if user is the trade host
       if (trade.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ Você não pode fazer uma oferta em seu próprio trade!', flags: 64 });
+        return interaction.reply({ content: '❌ You cannot make an offer on your own trade!', flags: 64 });
       }
 
       // Add offer to trade
@@ -3520,7 +3649,7 @@ async function getRobloxAvatarUrl(userId) {
 
       // Check if user is the auction host
       if (auction.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ Você não pode fazer um bid em seu próprio leilão!', ephemeral: true });
+        return interaction.reply({ content: '❌ You cannot bid on your own auction!', ephemeral: true });
       }
 
       const diamondsStr = interaction.fields.getTextInputValue('diamonds');
@@ -3921,5 +4050,3 @@ async function endAuction(channel) {
     auctionChannelId: '1461849894615646309'
   });
 }
-
-client.login(process.env.TOKEN || config.token);
