@@ -4,8 +4,53 @@ global.ReadableStream = ReadableStream;
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
+const redis = require('redis');
+
+// Function to increment version automatically
+function incrementVersion(currentVersion) {
+  const parts = currentVersion.split('.').map(Number);
+  if (parts.length !== 3) return '1.0.0';
+  
+  let [major, minor, patch] = parts;
+  
+  if (patch < 9) {
+    patch++;
+  } else {
+    patch = 0;
+    if (minor < 9) {
+      minor++;
+    } else {
+      minor = 0;
+      major++;
+    }
+  }
+  
+  return `${major}.${minor}.${patch}`;
+}
+
+// Function to update version file
+function updateVersionFile(category, newVersion) {
+  try {
+    const versionFile = require('./version.json');
+    versionFile[category] = newVersion;
+    versionFile.lastUpdated = new Date().toISOString();
+    fs.writeFileSync('./version.json', JSON.stringify(versionFile, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error updating version file:', error);
+    return false;
+  }
+}
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+
+// Redis client
+const redisClient = redis.createClient({
+  url: 'redis://default:GXpaeZBLEimkAjhcFwHsXfbyFbkpdMab@switchback.proxy.rlwy.net:39315'
+});
+
+redisClient.on('error', (err) => console.error('Redis Client Error', err));
+redisClient.connect();
 
 let redirectChannelId = config.defaultAuctionChannelId || null;
 let redirectTradeChannelId = config.defaultTradeChannelId || null;
@@ -181,49 +226,258 @@ function formatItemsList(items) {
   }).join('\n');
 }
 
-// Save data every 5 minutes
-setInterval(() => {
-  saveData();
+// Save data every 5 minutes and reload without losing active embeds
+setInterval(async () => {
+  await saveAndReloadData();
 }, 5 * 60 * 1000);
 
-function saveData() {
-  const data = {
-    redirectChannelId,
-    redirectTradeChannelId,
-    redirectInventoryChannelId,
-    redirectGiveawayChannelId,
-    inventories: Array.from(inventories.entries())
-  };
-  
-  fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
+async function saveAndReloadData() {
+  try {
+    console.log('Starting auto save and reload...');
+    
+    // First, save current data
+    await saveData();
+    
+    // Store current active data before loading
+    const currentTrades = new Map(trades);
+    const currentAuctions = new Map(auctions);
+    const currentGiveaways = new Map(giveaways);
+    const currentInventories = new Map(inventories);
+    const currentUserTradeCount = new Map(userTradeCount);
+    const currentUserGiveawayCount = new Map(userGiveawayCount);
+    const currentFinishedAuctions = new Map(finishedAuctions);
+    const currentFinishedGiveaways = new Map(finishedGiveaways);
+    
+    // Load data from Redis
+    await loadData();
+    
+    // Merge data - keep current active data, only add missing data
+    // For trades, auctions, giveaways - keep current active ones, add any missing from Redis
+    for (const [key, value] of currentTrades) {
+      if (!trades.has(key)) {
+        trades.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentAuctions) {
+      if (!auctions.has(key)) {
+        auctions.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentGiveaways) {
+      if (!giveaways.has(key)) {
+        giveaways.set(key, value);
+      }
+    }
+    
+    // For inventories, user counts, and finished items - merge both ways
+    for (const [key, value] of currentInventories) {
+      if (!inventories.has(key)) {
+        inventories.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentUserTradeCount) {
+      if (!userTradeCount.has(key)) {
+        userTradeCount.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentUserGiveawayCount) {
+      if (!userGiveawayCount.has(key)) {
+        userGiveawayCount.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentFinishedAuctions) {
+      if (!finishedAuctions.has(key)) {
+        finishedAuctions.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentFinishedGiveaways) {
+      if (!finishedGiveaways.has(key)) {
+        finishedGiveaways.set(key, value);
+      }
+    }
+    
+    console.log('Auto save and reload completed successfully - active embeds preserved');
+    
+  } catch (error) {
+    console.error('Error in auto save and reload:', error);
+  }
 }
 
-function loadData() {
+async function saveData() {
   try {
-    if (fs.existsSync('data.json')) {
-      const data = JSON.parse(fs.readFileSync('data.json', 'utf-8'));
-      
-      if (data.redirectChannelId) redirectChannelId = data.redirectChannelId;
-      if (data.redirectTradeChannelId) redirectTradeChannelId = data.redirectTradeChannelId;
-      if (data.redirectInventoryChannelId) redirectInventoryChannelId = data.redirectInventoryChannelId;
-      if (data.redirectGiveawayChannelId) redirectGiveawayChannelId = data.redirectGiveawayChannelId;
-      
-      if (data.inventories) {
-        data.inventories.forEach(([key, value]) => {
-          inventories.set(key, value);
-        });
+    // Save inventories
+    const inventoriesData = JSON.stringify(Array.from(inventories.entries()));
+    redisClient.set('INVENTORYSAVES', inventoriesData);
+
+    // Save trades
+    const tradesData = JSON.stringify(Array.from(trades.entries()));
+    redisClient.set('TRADESAVES', tradesData);
+
+    // Save giveaways
+    const giveawaysData = JSON.stringify(Array.from(giveaways.entries()));
+    redisClient.set('GIVEAWAYSAVES', giveawaysData);
+
+    // Save auctions
+    const auctionsData = JSON.stringify(Array.from(auctions.entries()));
+    redisClient.set('AUCTIONSAVES', auctionsData);
+
+    // Save finished auctions
+    const finishedAuctionsData = JSON.stringify(Array.from(finishedAuctions.entries()));
+    redisClient.set('FINISHEDAUCTIONSAVES', finishedAuctionsData);
+
+    // Save finished giveaways
+    const finishedGiveawaysData = JSON.stringify(Array.from(finishedGiveaways.entries()));
+    redisClient.set('FINISHEDGIVEAWAYSAVES', finishedGiveawaysData);
+
+    // Save user counts
+    const userTradeCountData = JSON.stringify(Array.from(userTradeCount.entries()));
+    redisClient.set('USERTRADECOUNTSAVES', userTradeCountData);
+
+    const userGiveawayCountData = JSON.stringify(Array.from(userGiveawayCount.entries()));
+    redisClient.set('USERGIVEAWAYCOUNTSAVES', userGiveawayCountData);
+
+    // Save redirects
+    const redirectsData = JSON.stringify({
+      redirectChannelId,
+      redirectTradeChannelId,
+      redirectInventoryChannelId,
+      redirectGiveawayChannelId
+    });
+    redisClient.set('REDIRECTSAVES', redirectsData);
+
+    console.log('Data saved to Redis successfully');
+
+    // Send detailed save report to admin channel
+    try {
+      const adminChannelId = '1461719381619904524';
+      const channel = client.channels.cache.get(adminChannelId);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('💾 Save System - Report')
+          .setColor('#00FF00')
+          .setTimestamp()
+          .setDescription('**Data successfully saved to Railway Redis**')
+          .addFields(
+            { name: '📦 Inventories', value: `${inventories.size} inventories saved`, inline: true },
+            { name: '🔄 Trades', value: `${trades.size} active trades saved`, inline: true },
+            { name: '🎉 Giveaways', value: `${giveaways.size} active giveaways saved`, inline: true },
+            { name: '🏆 Auctions', value: `${auctions.size} active auctions saved`, inline: true },
+            { name: '✅ Finished Auctions', value: `${finishedAuctions.size} finished auctions saved`, inline: true },
+            { name: '🎁 Finished Giveaways', value: `${finishedGiveaways.size} finished giveaways saved`, inline: true },
+            { name: '👥 Trade Counters', value: `${userTradeCount.size} users with trade counters`, inline: true },
+            { name: '🎊 Giveaway Counters', value: `${userGiveawayCount.size} users with giveaway counters`, inline: true },
+            { name: '🔧 Settings', value: `Redirects saved`, inline: true }
+          )
+          .setFooter({ text: 'Next automatic save in 5 minutes' });
+
+        await channel.send({ embeds: [embed] });
       }
-      
-      console.log('Data loaded successfully');
+    } catch (embedError) {
+      console.error('Error sending save report embed:', embedError);
     }
+  } catch (error) {
+    console.error('Error saving data to Redis:', error);
+  }
+}
+
+async function loadData() {
+  try {
+    // Load inventories
+    const inventoriesData = await redisClient.get('INVENTORYSAVES');
+    if (inventoriesData) {
+      const parsed = JSON.parse(inventoriesData);
+      parsed.forEach(([key, value]) => {
+        inventories.set(key, value);
+      });
+    }
+
+    // Load trades
+    const tradesData = await redisClient.get('TRADESAVES');
+    if (tradesData) {
+      const parsed = JSON.parse(tradesData);
+      parsed.forEach(([key, value]) => {
+        trades.set(key, value);
+      });
+    }
+
+    // Load giveaways
+    const giveawaysData = await redisClient.get('GIVEAWAYSAVES');
+    if (giveawaysData) {
+      const parsed = JSON.parse(giveawaysData);
+      parsed.forEach(([key, value]) => {
+        giveaways.set(key, value);
+      });
+    }
+
+    // Load auctions
+    const auctionsData = await redisClient.get('AUCTIONSAVES');
+    if (auctionsData) {
+      const parsed = JSON.parse(auctionsData);
+      parsed.forEach(([key, value]) => {
+        auctions.set(key, value);
+      });
+    }
+
+    // Load finished auctions
+    const finishedAuctionsData = await redisClient.get('FINISHEDAUCTIONSAVES');
+    if (finishedAuctionsData) {
+      const parsed = JSON.parse(finishedAuctionsData);
+      parsed.forEach(([key, value]) => {
+        finishedAuctions.set(key, value);
+      });
+    }
+
+    // Load finished giveaways
+    const finishedGiveawaysData = await redisClient.get('FINISHEDGIVEAWAYSAVES');
+    if (finishedGiveawaysData) {
+      const parsed = JSON.parse(finishedGiveawaysData);
+      parsed.forEach(([key, value]) => {
+        finishedGiveaways.set(key, value);
+      });
+    }
+
+    // Load user counts
+    const userTradeCountData = await redisClient.get('USERTRADECOUNTSAVES');
+    if (userTradeCountData) {
+      const parsed = JSON.parse(userTradeCountData);
+      parsed.forEach(([key, value]) => {
+        userTradeCount.set(key, value);
+      });
+    }
+
+    const userGiveawayCountData = await redisClient.get('USERGIVEAWAYCOUNTSAVES');
+    if (userGiveawayCountData) {
+      const parsed = JSON.parse(userGiveawayCountData);
+      parsed.forEach(([key, value]) => {
+        userGiveawayCount.set(key, value);
+      });
+    }
+
+    // Load redirects
+    const redirectsData = await redisClient.get('REDIRECTSAVES');
+    if (redirectsData) {
+      const parsed = JSON.parse(redirectsData);
+      if (parsed.redirectChannelId) redirectChannelId = parsed.redirectChannelId;
+      if (parsed.redirectTradeChannelId) redirectTradeChannelId = parsed.redirectTradeChannelId;
+      if (parsed.redirectInventoryChannelId) redirectInventoryChannelId = parsed.redirectInventoryChannelId;
+      if (parsed.redirectGiveawayChannelId) redirectGiveawayChannelId = parsed.redirectGiveawayChannelId;
+    }
+
+    console.log('Data loaded from Redis successfully');
   } catch (e) {
-    console.error('Error loading data:', e);
+    console.error('Error loading data from Redis:', e);
   }
 }
 
 client.once('ready', async () => {
   console.log('Auction Bot is ready!');
-  loadData();
+  await loadData();
 
   // Register slash commands
   const commands = [
@@ -344,6 +598,24 @@ client.once('ready', async () => {
       description: 'Show giveaway setup information (admin only)'
     },
     {
+      name: 'savedata',
+      description: 'Manually save all bot data to Redis (admin only)'
+    },
+    {
+      name: 'clearbotmessages',
+      description: 'Delete bot messages in this channel (admin only)',
+      options: [
+        {
+          name: 'amount',
+          type: ApplicationCommandOptionType.Integer,
+          description: 'Number of bot messages to delete (1-100)',
+          required: true,
+          min_value: 1,
+          max_value: 100
+        }
+      ]
+    },
+    {
       name: 'botcmds',
       description: 'View all available bot commands'
     },
@@ -388,10 +660,10 @@ client.on('messageCreate', async (message) => {
       // Create proof embed
       proofEmbed = new EmbedBuilder()
         .setTitle('🔄 Trade Proof')
-        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** ${trade.host}\n**Guest:** ${trade.acceptedUser}\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || 'No description provided'}`)
         .setColor(0x0099ff)
         .setImage(attachment.url)
-        .setFooter({ text: `Submitted by ${message.author.username}` })
+        .setFooter({ text: `Submitted by <@${message.author.id}>` })
         .setTimestamp();
     } else if (proofData.type === 'auction') {
       const auctionProofChannelId = '1461849894615646309';
@@ -413,7 +685,7 @@ client.on('messageCreate', async (message) => {
       // Create proof embed for auction
       proofEmbed = new EmbedBuilder()
         .setTitle('🎪 Auction Proof')
-        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${auctionData.diamonds} 💎\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || 'No description provided'}`)
         .setColor(0x00ff00)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.username}` })
@@ -470,9 +742,14 @@ client.on('messageCreate', async (message) => {
     if (auction.model === 'items' && diamonds > 0) return message.reply('This auction is offers only.');
     if (auction.model === 'diamonds' && items) return message.reply('This auction is diamonds only.');
 
+    // Additional check for 'both' model: if there's a previous bid with only diamonds, don't allow adding diamonds
+    if (auction.model === 'both' && diamonds > 0 && auction.bids.some(bid => bid.diamonds > 0 && !bid.items)) {
+      return message.reply('Since there\'s already a bid with only diamonds, you can only add items to your bid.');
+    }
+
     // Add bid
     auction.bids.push({ user: message.author, diamonds, items });
-    message.reply(`Bid placed: ${diamonds} 💎${items ? ` and ${items}` : ''}`);
+    message.reply(`Bid placed: ${formatBid(diamonds)} 💎${items ? ` and ${items}` : ''}`);
   }
 });
 
@@ -540,11 +817,14 @@ client.on('interactionCreate', async (interaction) => {
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
       if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
 
+      const versionFile = require('./version.json');
+      const version = versionFile.auction || '1.0.0';
+
       const embed = new EmbedBuilder()
         .setTitle('Auction System Setup')
         .setDescription('Welcome to the live auction system!\n\n**How it works:**\n- Auctions are held per channel to avoid conflicts.\n- Bidding can be done via text (e.g., "bid 10000") or slash commands.\n- The auction ends automatically after the set time, or can be ended early.\n- Winner is the highest bidder (diamonds first, then first bid if tie).\n\nClick the button below to create a new auction.')
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: `Version ${version} | Made By Atlas` })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -568,8 +848,33 @@ client.on('interactionCreate', async (interaction) => {
 
         const versionFile = require('./version.json');
 
-        // Define embeds to update with their respective version keys
+        // Increment versions automatically for all categories
         const categoriesToUpdate = [
+          { key: 'auction', name: 'Auction' },
+          { key: 'trade', name: 'Trade' },
+          { key: 'inventory', name: 'Inventory' },
+          { key: 'giveaway', name: 'Giveaway' }
+        ];
+
+        let versionChanges = [];
+
+        for (const category of categoriesToUpdate) {
+          const currentVersion = versionFile[category.key] || '1.0.0';
+          const newVersion = incrementVersion(currentVersion);
+          
+          if (updateVersionFile(category.key, newVersion)) {
+            versionChanges.push(`${category.name}: ${currentVersion} → ${newVersion}`);
+          } else {
+            versionChanges.push(`${category.name}: Failed to update version`);
+          }
+        }
+
+        // Reload version file after updates
+        delete require.cache[require.resolve('./version.json')];
+        const updatedVersionFile = require('./version.json');
+
+        // Define embeds to update with their respective version keys
+        const categoriesToUpdateEmbeds = [
           {
             title: 'Auction System Setup',
             color: 0x00ff00,
@@ -597,8 +902,8 @@ client.on('interactionCreate', async (interaction) => {
           {
             title: '🎁 Giveaway System Setup',
             color: 0xFF1493,
-            description: 'Welcome to the giveaway system!\n\n**How it works:**\n- Create a giveaway with items you want to give away.\n- Set a duration for the giveaway.\n- Other users can enter the giveaway.\n- When the time expires, a random winner is selected.\n- Upload proof of completion when the giveaway ends.\n\nClick the button below to create a new giveaway.',
-            customId: 'giveaway_setup_start',
+            description: 'Welcome to the giveaway system!\n\n**How it works:**\n- Create a giveaway with items you want to give away.\n- Users can enter the giveaway by clicking the button.\n- Winners are selected randomly from all entries.\n- The role <@&1462168024151883836> will be mentioned when the giveaway starts!\n\nClick the button below to create a new giveaway.',
+            customId: 'create_giveaway',
             buttonLabel: 'Create Giveaway',
             versionKey: 'giveaway'
           }
@@ -607,10 +912,10 @@ client.on('interactionCreate', async (interaction) => {
         let updatedCount = 0;
         let failedCount = 0;
 
-        for (const category of categoriesToUpdate) {
+        for (const category of categoriesToUpdateEmbeds) {
           try {
-            // Get version from version.json for this category
-            const version = versionFile[category.versionKey] || '1.0.0';
+            // Get updated version from version.json for this category
+            const version = updatedVersionFile[category.versionKey] || '1.0.0';
 
             // Search for messages with this embed title in all channels
             const channels = interaction.guild.channels.cache.filter(c => c.isTextBased());
@@ -656,10 +961,10 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const updateEmbed = new EmbedBuilder()
-          .setTitle('✅ Embeds Updated')
-          .setDescription(`**Update Summary:**\n- ✅ Successfully updated: ${updatedCount} embed(s)\n- ❌ Failed: ${failedCount} embed(s)\n\n**Versions Applied:**\n- 🎪 Auction: v${versionFile.auction || '1.0.0'}\n- 🔄 Trade: v${versionFile.trade || '1.0.0'}\n- 📦 Inventory: v${versionFile.inventory || '1.0.0'}`)
+          .setTitle('✅ Embeds Updated with New Versions')
+          .setDescription(`**Update Summary:**\n- ✅ Successfully updated: ${updatedCount} embed(s)\n- ❌ Failed: ${failedCount} embed(s)\n\n**Version Changes:**\n${versionChanges.map(change => `- ${change}`).join('\n')}\n\n**Current Versions:**\n- 🎪 Auction: v${updatedVersionFile.auction || '1.0.0'}\n- 🔄 Trade: v${updatedVersionFile.trade || '1.0.0'}\n- 📦 Inventory: v${updatedVersionFile.inventory || '1.0.0'}\n- 🎁 Giveaway: v${updatedVersionFile.giveaway || '1.0.0'}`)
           .setColor(0x00ff00)
-          .setFooter({ text: `Last Updated: ${versionFile.lastUpdated || new Date().toISOString()} | Made By Atlas` });
+          .setFooter({ text: `Last Updated: ${updatedVersionFile.lastUpdated || new Date().toISOString()} | Made By Atlas` });
 
         await interaction.editReply({ embeds: [updateEmbed] });
       } catch (error) {
@@ -840,11 +1145,14 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
+      const versionFile = require('./version.json');
+      const version = versionFile.trade || '1.0.0';
+
       const embed = new EmbedBuilder()
         .setTitle('Trade System Setup')
         .setDescription('Welcome to the live trade system!\n\n**How it works:**\n- Create a trade offer with items or diamonds.\n- Other users can place their offers in response.\n- Host can accept or decline offers.\n- Once accepted, both users are notified.\n\nClick the button below to create a new trade.')
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: `Version ${version} | Made By Atlas` })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -884,7 +1192,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       trades.delete(messageId);
-      interaction.reply({ content: `Trade from ${trade.host} has been deleted.`, ephemeral: true });
+      interaction.reply({ content: `Trade from ${trade.host.displayName || trade.host.username} has been deleted.`, ephemeral: true });
     }
 
     if (commandName === 'accepttrade') {
@@ -919,11 +1227,14 @@ client.on('interactionCreate', async (interaction) => {
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
       if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
 
+      const versionFile = require('./version.json');
+      const version = versionFile.inventory || '1.0.0';
+
       const embed = new EmbedBuilder()
         .setTitle('📦 Inventory System Setup')
         .setDescription('Welcome to the inventory system!\n\n**How it works:**\n- Create your personal inventory with items you have in stock.\n- Set your diamond amount and describe what you\'re looking for.\n- Optionally add your Roblox username to display your avatar.\n- Other users can see your inventory and make offers!\n- Update anytime - your previous items stay saved if you don\'t remove them.\n\nClick the button below to create or edit your inventory.')
         .setColor(0x00a8ff)
-        .setFooter({ text: 'Version 1.0.8 | Made By Atlas' })
+        .setFooter({ text: `Version ${version} | Made By Atlas` })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -942,11 +1253,14 @@ client.on('interactionCreate', async (interaction) => {
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
       if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
 
+      const versionFile = require('./version.json');
+      const version = versionFile.giveaway || '1.0.0';
+
       const embed = new EmbedBuilder()
         .setTitle('🎁 Giveaway System Setup')
         .setDescription('Welcome to the giveaway system!\n\n**How it works:**\n- Create a giveaway with items you want to give away.\n- Users can enter the giveaway by clicking the button.\n- Winners are selected randomly from all entries.\n- The role <@&1462168024151883836> will be mentioned when the giveaway starts!\n\nClick the button below to create a new giveaway.')
         .setColor(0xFF1493)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: `Version ${version} | Made By Atlas` })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -958,6 +1272,66 @@ client.on('interactionCreate', async (interaction) => {
         );
 
       await interaction.reply({ embeds: [embed], components: [row] });
+    }
+
+    if (commandName === 'savedata') {
+      // Check if user has admin role (same as other admin commands)
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+
+      try {
+        await saveData();
+        await interaction.reply({ content: '✅ All bot data has been successfully saved to Redis!', ephemeral: true });
+      } catch (error) {
+        console.error('Error saving data:', error);
+        await interaction.reply({ content: '❌ An error occurred while saving data.', ephemeral: true });
+      }
+    }
+
+    if (commandName === 'clearbotmessages') {
+      // Check if user has admin role
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+
+      const amount = interaction.options.getInteger('amount');
+      
+      try {
+        await interaction.deferReply({ ephemeral: true });
+        
+        // Fetch messages from the channel
+        const messages = await interaction.channel.messages.fetch({ limit: 100 });
+        
+        // Filter bot messages
+        const botMessages = messages.filter(msg => msg.author.id === client.user.id);
+        
+        // Get the specified amount of bot messages
+        const messagesToDelete = botMessages.first(amount);
+        
+        if (messagesToDelete.length === 0) {
+          return interaction.editReply({ content: '❌ No bot messages found in this channel.' });
+        }
+        
+        // Delete the messages
+        let deletedCount = 0;
+        for (const message of messagesToDelete) {
+          try {
+            await message.delete();
+            deletedCount++;
+          } catch (error) {
+            console.error(`Failed to delete message ${message.id}:`, error);
+          }
+        }
+        
+        await interaction.editReply({ 
+          content: `✅ Successfully deleted ${deletedCount} bot message(s) out of ${amount} requested.` 
+        });
+        
+      } catch (error) {
+        console.error('Error clearing bot messages:', error);
+        await interaction.editReply({ content: '❌ An error occurred while clearing bot messages.' });
+      }
     }
 
     if (commandName === 'botcmds') {
@@ -999,6 +1373,8 @@ client.on('interactionCreate', async (interaction) => {
           color: 0xffa500,
           fields: [
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
+            { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
+            { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
@@ -1097,6 +1473,8 @@ client.on('interactionCreate', async (interaction) => {
           color: 0xffa500,
           fields: [
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
+            { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
+            { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
@@ -1625,7 +2003,7 @@ client.on('interactionCreate', async (interaction) => {
       // Update embed and ping both users
       await updateTradeEmbed(interaction.guild, trade, messageId);
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`✅ Trade accepted! ${trade.host} and ${lastOffer.user}, your trade has been accepted.`);
+      await channel.send(`✅ Trade accepted! <@${trade.host.id}> and <@${lastOffer.user.id}>, your trade has been accepted.`);
 
       await interaction.reply({ content: 'Trade accepted!', ephemeral: true });
     }
@@ -1643,7 +2021,7 @@ client.on('interactionCreate', async (interaction) => {
       // Update embed
       await updateTradeEmbed(interaction.guild, trade, messageId);
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`❌ Trade offer from ${lastOffer.user} has been declined.`);
+      await channel.send(`❌ Trade offer from <@${lastOffer.user.id}> has been declined.`);
 
       await interaction.reply({ content: 'Offer declined!', ephemeral: true });
     }
@@ -2080,17 +2458,26 @@ client.on('interactionCreate', async (interaction) => {
         const row = new ActionRowBuilder().addComponents(itemSelect);
         await interaction.reply({ content: 'Select items to remove:', components: [row], flags: 64 });
       } else if (choice === 'confirm_items') {
+        // Check if diamonds are already added as items
+        const hasDiamonds = (interaction.user.tradeItems || []).some(item => item.name === '💎 Diamonds');
+        
         // Move to diamonds and target user
         const diamondsModal = new ModalBuilder()
           .setCustomId('trade_setup_modal')
           .setTitle('Complete Your Trade Offer');
 
-        const diamondsInput = new TextInputBuilder()
-          .setCustomId('trade_diamonds')
-          .setLabel('Diamonds (optional)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('0')
-          .setRequired(false);
+        // Only show diamonds input if not already added as items
+        if (!hasDiamonds) {
+          const diamondsInput = new TextInputBuilder()
+            .setCustomId('trade_diamonds')
+            .setLabel('Diamonds (optional)')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('0')
+            .setRequired(false);
+
+          const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+          diamondsModal.addComponents(row1);
+        }
 
         const userInput = new TextInputBuilder()
           .setCustomId('trade_target_user')
@@ -2099,10 +2486,14 @@ client.on('interactionCreate', async (interaction) => {
           .setPlaceholder('Leave empty for open trade')
           .setRequired(false);
 
-        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
         const row2 = new ActionRowBuilder().addComponents(userInput);
+        
+        if (!hasDiamonds) {
+          diamondsModal.addComponents(row2);
+        } else {
+          diamondsModal.addComponents(row2);
+        }
 
-        diamondsModal.addComponents(row1, row2);
         await interaction.showModal(diamondsModal);
       }
     }
@@ -2128,23 +2519,62 @@ client.on('interactionCreate', async (interaction) => {
         const row = new ActionRowBuilder().addComponents(categorySelect);
         await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
       } else if (choice === 'confirm_items') {
+        // Check if diamonds are already added
+        const offerItems = interaction.user.offerTradeItems || [];
+        const hasDiamonds = offerItems.some(item => item.name === '💎 Diamonds');
+        const onlyDiamonds = offerItems.length > 0 && offerItems.every(item => item.name === '💎 Diamonds');
+        
+        // If offer contains only diamonds, submit directly without modal
+        if (onlyDiamonds) {
+          const trade = trades.get(messageId);
+          if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
+
+          // Check if user is the trade host
+          if (trade.host.id === interaction.user.id) {
+            return interaction.reply({ content: '❌ You cannot make an offer on your own trade!', flags: 64 });
+          }
+
+          // Add offer to trade
+          trade.offers.push({
+            user: interaction.user,
+            diamonds: offerItems.reduce((sum, item) => sum + item.quantity, 0),
+            items: [],
+            timestamp: Date.now()
+          });
+
+          // Update trade embed to show grid layout
+          await updateTradeEmbed(interaction.guild, trade, messageId);
+
+          // Notify host of new offer
+          const channel = interaction.guild.channels.cache.get(trade.channelId);
+          if (channel) {
+            await channel.send(`📢 <@${trade.host.id}>, you received an offer from <@${interaction.user.id}>!`);
+          }
+
+          await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
+          return;
+        }
+        
         // Move to diamonds and submit
         const diamondsModal = new ModalBuilder()
           .setCustomId(`offer_submit_modal_${messageId}`)
           .setTitle('Complete Your Offer');
 
-        const diamondsInput = new TextInputBuilder()
-          .setCustomId('offer_diamonds')
-          .setLabel('Diamonds (optional)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('0')
-          .setRequired(false);
+        // Only show diamonds input if not already added
+        if (!hasDiamonds) {
+          const diamondsInput = new TextInputBuilder()
+            .setCustomId('offer_diamonds')
+            .setLabel('Diamonds (optional)')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('0')
+            .setRequired(false);
 
-        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
-        diamondsModal.addComponents(row1);
+          const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+          diamondsModal.addComponents(row1);
+        }
         
         // Store items in interaction metadata
-        interaction.user.offerItems = interaction.user.offerTradeItems || [];
+        interaction.user.offerItems = offerItems;
         interaction.user.messageId = messageId;
         delete interaction.user.offerTradeItems;
         delete interaction.user.selectedOfferItems;
@@ -2232,7 +2662,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('inventory_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
-	    { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
+	          { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
             { label: 'Huges', value: 'huges', emoji: '🔥' },
             { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
             { label: 'Eggs', value: 'eggs', emoji: '🥚' },
@@ -2242,23 +2672,37 @@ client.on('interactionCreate', async (interaction) => {
         const row = new ActionRowBuilder().addComponents(categorySelect);
         await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
       } else if (choice === 'continue_to_setup') {
+        // Load previous inventory data to pre-fill modal
+        const previousInventory = inventories.get(interaction.user.id);
+        
+        // Check if diamonds are already added as items
+        const hasDiamonds = (interaction.user.inventoryItems || []).some(item => item.name === '💎 Diamonds');
+        
         // Move to inventory setup modal
         const inventoryModal = new ModalBuilder()
           .setCustomId('inventory_setup_modal')
           .setTitle('Complete Your Inventory');
 
-        const diamondsInput = new TextInputBuilder()
-          .setCustomId('inv_diamonds')
-          .setLabel('Diamonds in stock (optional)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('0')
-          .setRequired(false);
+        // Only show diamonds input if not already added as items
+        if (!hasDiamonds) {
+          const diamondsInput = new TextInputBuilder()
+            .setCustomId('inv_diamonds')
+            .setLabel('Diamonds in stock (optional)')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('0')
+            .setValue(previousInventory ? previousInventory.diamonds.toString() : '0')
+            .setRequired(false);
+
+          const row1 = new ActionRowBuilder().addComponents(diamondsInput);
+          inventoryModal.addComponents(row1);
+        }
 
         const lookingForInput = new TextInputBuilder()
           .setCustomId('inv_looking_for')
           .setLabel('What are you looking for?')
           .setStyle(TextInputStyle.Paragraph)
           .setPlaceholder('Describe what items/diamonds you\'re looking for')
+          .setValue(previousInventory ? previousInventory.lookingFor : '')
           .setRequired(true);
 
         const robloxInput = new TextInputBuilder()
@@ -2266,13 +2710,17 @@ client.on('interactionCreate', async (interaction) => {
           .setLabel('Roblox username (optional)')
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('YourRobloxUsername')
+          .setValue(previousInventory ? previousInventory.robloxUsername : '')
           .setRequired(false);
 
-        const row1 = new ActionRowBuilder().addComponents(diamondsInput);
         const row2 = new ActionRowBuilder().addComponents(lookingForInput);
         const row3 = new ActionRowBuilder().addComponents(robloxInput);
 
-        inventoryModal.addComponents(row1, row2, row3);
+        if (!hasDiamonds) {
+          inventoryModal.addComponents(row2, row3);
+        } else {
+          inventoryModal.addComponents(row2, row3);
+        }
         
         delete interaction.user.selectedInventoryItems;
         delete interaction.user.selectedInventoryCategory;
@@ -2568,8 +3016,8 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'giveaway_category_select') {
       const category = interaction.values[0];
       const { StringSelectMenuBuilder } = require('discord.js');
-      
       if (category === 'diamonds') {
+        
         // Show modal for diamonds input
         const diamondsModal = new ModalBuilder()
           .setCustomId('giveaway_diamonds_modal')
@@ -2677,7 +3125,13 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.tradeItems = [];
       }
 
-      interaction.user.tradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+      // Check if diamonds already exist, if so replace quantity instead of adding
+      const existingDiamondsIndex = interaction.user.tradeItems.findIndex(item => item.name === '💎 Diamonds');
+      if (existingDiamondsIndex !== -1) {
+        interaction.user.tradeItems[existingDiamondsIndex].quantity = diamonds;
+      } else {
+        interaction.user.tradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+      }
 
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -2744,7 +3198,13 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.offerTradeItems = [];
       }
 
-      interaction.user.offerTradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+      // Check if diamonds already exist, if so replace quantity instead of adding
+      const existingDiamondsIndex = interaction.user.offerTradeItems.findIndex(item => item.name === '💎 Diamonds');
+      if (existingDiamondsIndex !== -1) {
+        interaction.user.offerTradeItems[existingDiamondsIndex].quantity = diamonds;
+      } else {
+        interaction.user.offerTradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+      }
 
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -2777,7 +3237,13 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.inventoryItems = [];
       }
 
-      interaction.user.inventoryItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+      // Check if diamonds already exist, if so replace quantity instead of adding
+      const existingDiamondsIndex = interaction.user.inventoryItems.findIndex(item => item.name === '💎 Diamonds');
+      if (existingDiamondsIndex !== -1) {
+        interaction.user.inventoryItems[existingDiamondsIndex].quantity = diamonds;
+      } else {
+        interaction.user.inventoryItems.push({ name: `💎 Diamonds`, quantity: diamonds });
+      }
 
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -2964,7 +3430,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'inventory_setup_modal') {
-  const diamondsStr = interaction.fields.getTextInputValue('inv_diamonds') || '0';
+  const diamondsStr = interaction.fields.fields.has('inv_diamonds') ? interaction.fields.getTextInputValue('inv_diamonds') : '0';
   const lookingFor = interaction.fields.getTextInputValue('inv_looking_for') || 'Not specified';
   const robloxInput = interaction.fields.getTextInputValue('inv_roblox_username') || '';
 
@@ -2973,23 +3439,23 @@ client.on('interactionCreate', async (interaction) => {
     diamonds = parseBid(diamondsStr);
   }
 
-  // --- LÓGICA DE CONVERSÃO DE USERNAME PARA ID ---
+  // --- USERNAME TO ID CONVERSION LOGIC ---
   let robloxId = null;
   if (robloxInput) {
-    // Se o input for apenas números, tratamos como ID. Se não, buscamos o ID pelo Nome.
+    // If input is only numbers, treat as ID. If not, search for ID by Name.
     if (!isNaN(robloxInput)) {
       robloxId = robloxInput;
     } else {
-      // Função auxiliar para pegar ID pelo nome (veja abaixo)
+      // Helper function to get ID by name (see below)
       robloxId = await getRobloxId(robloxInput);
     }
   }
 
   const inventoryItems = interaction.user.inventoryItems || [];
   delete interaction.user.inventoryItems;
-  // ... (restante dos seus deletes)
+  // ... (rest of your deletes)
 
-  // Lógica de deletar inventário anterior...
+  // Logic to delete previous inventory...
   const previousInventory = inventories.get(interaction.user.id);
   if (previousInventory) {
     try {
@@ -3006,23 +3472,23 @@ client.on('interactionCreate', async (interaction) => {
     .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
     .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-  // CONFIGURAÇÃO DO AUTHOR (Avatar do Roblox)
+  // AUTHOR CONFIGURATION (Roblox Avatar)
   if (robloxId && robloxId !== 'null' && robloxId !== '' && !isNaN(robloxId)) {
-    // Buscar o avatar do usuário Roblox
+    // Fetch user's Roblox avatar
     const avatarUrl = await getRobloxAvatarUrl(robloxId);
     
     if (avatarUrl) {
       console.log(`Loading Roblox avatar for user ${interaction.user.username} with ID ${robloxId}: ${avatarUrl}`);
       
       embed.setAuthor({ 
-        name: interaction.user.username, 
+        name: interaction.member.displayName, 
         iconURL: avatarUrl 
       });
     } else {
-      // Se falhar em pegar o avatar do Roblox, usa o avatar do Discord
+      // If failed to get Roblox avatar, use Discord avatar
       console.log(`Failed to fetch Roblox avatar for ID ${robloxId}, using Discord avatar`);
       embed.setAuthor({ 
-        name: interaction.user.username, 
+        name: interaction.member.displayName, 
         iconURL: interaction.user.displayAvatarURL() 
       });
     }
@@ -3031,15 +3497,15 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`Failed to load Roblox avatar for username: ${robloxInput} (resolved ID: ${robloxId})`);
     }
     embed.setAuthor({ 
-      name: interaction.user.username, 
+      name: interaction.member.displayName, 
       iconURL: interaction.user.displayAvatarURL() 
     });
   }
 
-  // Restante do preenchimento do embed...
+  // Rest of embed filling...
   const itemsText = formatItemsText(inventoryItems);
   embed.addFields({ 
-    name: `Items${diamonds > 0 ? ` + ${diamonds.toLocaleString()} 💎` : 'None'}`,
+    name: `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : 'None'}`,
     value: itemsText,
     inline: true
   });
@@ -3047,10 +3513,12 @@ client.on('interactionCreate', async (interaction) => {
   embed.addFields({ name: 'Looking For', value: lookingFor, inline: true });
 
   const now = new Date();
-  const timeStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} at ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  // Adjust to GMT-5 (UTC-5)
+  const gmt5Time = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+  const timeStr = `${gmt5Time.getDate()}/${gmt5Time.getMonth() + 1}/${gmt5Time.getFullYear()} at ${gmt5Time.getHours().toString().padStart(2, '0')}:${gmt5Time.getMinutes().toString().padStart(2, '0')}`;
   embed.addFields({ name: 'Last Edited', value: timeStr, inline: false });
 
-  // Botões e envio...
+  // Buttons and sending...
   const updateButton = new ButtonBuilder()
     .setCustomId('inventory_update_button')
     .setLabel('Update Inventory')
@@ -3073,12 +3541,12 @@ client.on('interactionCreate', async (interaction) => {
     diamonds: diamonds,
     lookingFor: lookingFor,
     robloxUsername: robloxInput, // guarda o que o user digitou
-    lastEdited: now
+    lastEdited: gmt5Time
   };
   inventories.set(interaction.user.id, inventoryData);
 }
 
-// FUNÇÃO AUXILIAR (Coloque fora do evento de interação)
+// HELPER FUNCTION (Place outside interaction event)
 async function getRobloxId(username) {
   try {
     if (!username || username.trim() === '') return null;
@@ -3105,36 +3573,38 @@ async function getRobloxId(username) {
   }
 }
 
-// Função para pegar o avatar do Roblox
+// Function to get Roblox avatar using official API
 async function getRobloxAvatarUrl(userId) {
   try {
     if (!userId || isNaN(userId)) return null;
     
-    const profileUrl = `https://www.roblox.com/users/${userId}/profile`;
-    console.log(`Fetching Roblox profile for avatar: ${profileUrl}`);
+    const apiUrl = `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`;
+    console.log(`Fetching Roblox avatar from API: ${apiUrl}`);
     
-    const response = await fetch(profileUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
-      console.error(`Roblox profile error: ${response.status}`);
+      console.error(`Roblox API error: ${response.status}`);
       return null;
     }
     
-    const html = await response.text();
-    // Procura pela meta tag og:image
-    const match = html.match(/property="og:image"\s+content="([^"]+)"/);
+    const data = await response.json();
     
-    if (match && match[1]) {
-      const imageUrl = match[1];
-      console.log(`✅ Avatar URL extracted from og:image`);
-      return imageUrl;
+    // Check if API returned data
+    if (data.data && data.data.length > 0) {
+      const avatarData = data.data[0];
+      
+      // Check if state is "Completed" and if there's imageUrl
+      if (avatarData.state === 'Completed' && avatarData.imageUrl) {
+        console.log(`✅ Avatar URL successfully obtained for user ${userId}`);
+        return avatarData.imageUrl;
+      } else {
+        console.log(`⚠️ Avatar state: ${avatarData.state}`);
+        return null;
+      }
     }
     
-    console.log(`⚠️ og:image não encontrado no perfil`);
+    console.log(`⚠️ No avatar data returned by API`);
     return null;
   } catch (e) {
     console.error('Error fetching Roblox avatar URL:', e.message);
@@ -3402,7 +3872,7 @@ async function getRobloxAvatarUrl(userId) {
       // Create trade embed
       const embed = new EmbedBuilder()
         .setTitle('Trade Offer')
-        .setDescription(`**Host:** ${interaction.user}\n**Status:** Waiting for offers`)
+        .setDescription(`**Host:** <@${interaction.user.id}>\n**Status:** Waiting for offers`)
         .setColor(0x0099ff)
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
@@ -3449,7 +3919,7 @@ async function getRobloxAvatarUrl(userId) {
       const currentCount = userTradeCount.get(interaction.user.id) || 0;
       userTradeCount.set(interaction.user.id, currentCount + 1);
 
-      await interaction.reply({ content: `Trade offer created! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
+      await interaction.reply({ content: `Trade offer created in ${targetChannel}! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
       return;
     }
 
@@ -3471,7 +3941,7 @@ async function getRobloxAvatarUrl(userId) {
 
       // Check if user is the trade host
       if (trade.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ Você não pode fazer uma oferta em seu próprio trade!', flags: 64 });
+        return interaction.reply({ content: '❌ You cannot make an offer on your own trade!', flags: 64 });
       }
 
       // Add offer to trade
@@ -3488,7 +3958,7 @@ async function getRobloxAvatarUrl(userId) {
       // Notify host of new offer
       const channel = interaction.guild.channels.cache.get(trade.channelId);
       if (channel) {
-        await channel.send(`📢 ${trade.host}, você recebeu uma oferta de ${interaction.user}!`);
+        await channel.send(`📢 <@${trade.host.id}>, you received an offer from <@${interaction.user.id}>!`);
       }
 
       await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
@@ -3501,7 +3971,7 @@ async function getRobloxAvatarUrl(userId) {
 
       // Check if user is the auction host
       if (auction.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ Você não pode fazer um bid em seu próprio leilão!', ephemeral: true });
+        return interaction.reply({ content: '❌ You cannot bid on your own auction!', ephemeral: true });
       }
 
       const diamondsStr = interaction.fields.getTextInputValue('diamonds');
@@ -3516,6 +3986,11 @@ async function getRobloxAvatarUrl(userId) {
       if (auction.model === 'diamonds' && items) return interaction.reply({ content: 'This auction is diamonds only.', ephemeral: true });
       if (auction.model === 'diamonds' && diamonds === 0) return interaction.reply({ content: 'Please enter diamonds.', ephemeral: true });
       if (auction.model === 'items' && !items) return interaction.reply({ content: 'Please enter an offer.', ephemeral: true });
+
+      // Additional check for 'both' model: if there's a previous bid with only diamonds, don't allow adding diamonds
+      if (auction.model === 'both' && diamonds > 0 && auction.bids.some(bid => bid.diamonds > 0 && !bid.items)) {
+        return interaction.reply({ content: 'Since there\'s already a bid with only diamonds, you can only add items to your bid.', ephemeral: true });
+      }
 
       // Check if bid is higher than current max
       const maxBid = auction.bids.length > 0 ? Math.max(...auction.bids.map(b => b.diamonds)) : auction.startingPrice;
@@ -3729,7 +4204,13 @@ async function getRobloxAvatarUrl(userId) {
         interaction.user.giveawayItems = [];
       }
       
-      interaction.user.giveawayItems.push({ name: '💎 Diamonds', quantity: diamonds });
+      // Check if diamonds already exist, if so replace quantity instead of adding
+      const existingDiamondsIndex = interaction.user.giveawayItems.findIndex(item => item.name === '💎 Diamonds');
+      if (existingDiamondsIndex !== -1) {
+        interaction.user.giveawayItems[existingDiamondsIndex].quantity = diamonds;
+      } else {
+        interaction.user.giveawayItems.push({ name: '💎 Diamonds', quantity: diamonds });
+      }
 
       // Show continue select
       const { StringSelectMenuBuilder } = require('discord.js');
@@ -3775,19 +4256,19 @@ async function updateTradeEmbed(guild, trade, messageId) {
 
     if (trade.accepted) {
       if (trade.adminCancelled) {
-        embed.setDescription(`**Status:** ❌ Cancelled by an admin\n\n**Host:** ${trade.host}`);
+        embed.setDescription(`**Status:** ❌ Cancelled by an admin\n\n**Host:** <@${trade.host.id}>`);
       } else {
-        embed.setDescription(`**Status:** ✅ Trade Accepted\n\n**Host:** ${trade.host}\n**Guest:** ${trade.acceptedUser}`);
+        embed.setDescription(`**Status:** ✅ Trade Accepted\n\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>`);
       }
     } else if (trade.offers.length > 0) {
-      embed.setDescription(`**Status:** Awaiting Host Decision\n\n**Host:** ${trade.host}`);
+      embed.setDescription(`**Status:** Awaiting Host Decision\n\n**Host:** <@${trade.host.id}>`);
     } else {
-      embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** ${trade.host}`);
+      embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** <@${trade.host.id}>`);
     }
 
     const hostItemsText = formatItemsText(trade.hostItems);
     embed.addFields({
-      name: `Host${trade.hostDiamonds > 0 ? ` (+ ${trade.hostDiamonds} 💎)` : ''}`,
+      name: `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`,
       value: hostItemsText,
       inline: true
     });
@@ -3796,7 +4277,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
       const lastOffer = trade.offers[trade.offers.length - 1];
       const guestItemsText = formatItemsText(lastOffer.items);
       embed.addFields({
-        name: `${lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${lastOffer.diamonds} 💎)` : ''}`,
+        name: `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
         value: guestItemsText,
         inline: true
       });
@@ -3805,7 +4286,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
       if (acceptedOffer) {
         const guestItemsText = formatItemsText(acceptedOffer.items);
         embed.addFields({
-          name: `${acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${acceptedOffer.diamonds} 💎)` : ''}`,
+          name: `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`,
           value: guestItemsText,
           inline: true
         });
@@ -3875,6 +4356,21 @@ async function endAuction(channel) {
   auction.bids.sort((a, b) => b.diamonds - a.diamonds || auction.bids.indexOf(a) - auction.bids.indexOf(b));
   const winner = auction.bids[0];
 
+  // Update the active embed with winner and red color
+  try {
+    const message = await channel.messages.fetch(auction.messageId);
+    const finalEmbed = new EmbedBuilder()
+      .setTitle(auction.title)
+      .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Winning Bid:** ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}\n**Winner:** ${winner.user}\n**Hosted by:** ${auction.host}`)
+      .setColor(0xff0000) // Red color
+      .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+      .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+    await message.edit({ embeds: [finalEmbed], components: [] }); // Remove buttons
+  } catch (e) {
+    console.error('Error updating auction embed:', e);
+  }
+
   const embed = new EmbedBuilder()
     .setTitle('Auction Ended!')
     .setDescription(`**Title:** ${auction.title}\n**Winner:** ${winner.user}\n**Bid:** ${winner.diamonds} 💎${winner.items ? ` and ${winner.items}` : ''}`)
@@ -3903,4 +4399,4 @@ async function endAuction(channel) {
   });
 }
 
-client.login(process.env.TOKEN || config.token);
+client.login(process.env.TOKEN);
