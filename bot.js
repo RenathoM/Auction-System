@@ -2915,90 +2915,114 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'inventory_setup_modal') {
-      const diamondsStr = interaction.fields.getTextInputValue('inv_diamonds') || '0';
-      const lookingFor = interaction.fields.getTextInputValue('inv_looking_for') || 'Not specified';
-      const robloxUsername = interaction.fields.getTextInputValue('inv_roblox_username') || '';
+  const diamondsStr = interaction.fields.getTextInputValue('inv_diamonds') || '0';
+  const lookingFor = interaction.fields.getTextInputValue('inv_looking_for') || 'Not specified';
+  const robloxInput = interaction.fields.getTextInputValue('inv_roblox_username') || '';
 
-      let diamonds = 0;
-      if (diamondsStr && diamondsStr !== '0') {
-        diamonds = parseBid(diamondsStr);
-      }
+  let diamonds = 0;
+  if (diamondsStr && diamondsStr !== '0') {
+    diamonds = parseBid(diamondsStr);
+  }
 
-      const inventoryItems = interaction.user.inventoryItems || [];
-      delete interaction.user.inventoryItems;
-      delete interaction.user.selectedInventoryItems;
-      delete interaction.user.selectedInventoryCategory;
-      delete interaction.user.selectedInventorySubcategory;
+  // --- LÓGICA DE CONVERSÃO DE USERNAME PARA ID ---
+  let robloxId = null;
+  if (robloxInput) {
+    // Se o input for apenas números, tratamos como ID. Se não, buscamos o ID pelo Nome.
+    if (!isNaN(robloxInput)) {
+      robloxId = robloxInput;
+    } else {
+      // Função auxiliar para pegar ID pelo nome (veja abaixo)
+      robloxId = await getRobloxId(robloxInput);
+    }
+  }
 
-      // Delete previous inventory if exists
-      const previousInventory = inventories.get(interaction.user.id);
-      if (previousInventory) {
-        try {
-          const channel = interaction.guild.channels.cache.get(previousInventory.channelId);
-          const message = await channel.messages.fetch(previousInventory.messageId);
-          await message.delete();
-        } catch (e) {
-          // ignore if message not found
-        }
-      }
+  const inventoryItems = interaction.user.inventoryItems || [];
+  delete interaction.user.inventoryItems;
+  // ... (restante dos seus deletes)
 
-      // Create inventory embed
-      const embed = new EmbedBuilder()
-        .setTitle('📦 Inventory')
-        .setColor(0x00a8ff)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
-        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+  // Lógica de deletar inventário anterior...
+  const previousInventory = inventories.get(interaction.user.id);
+  if (previousInventory) {
+    try {
+      const channel = interaction.guild.channels.cache.get(previousInventory.channelId);
+      const message = await channel.messages.fetch(previousInventory.messageId);
+      await message.delete();
+    } catch (e) {}
+  }
 
-      if (robloxUsername) {
-        embed.setAuthor({ 
-          name: interaction.user.username, 
-          iconURL: `https://www.roblox.com/bust-thumbnails/v1/individual?userIds=${robloxUsername}&size=420x420&format=Png&isCircular=false` 
-        });
-      } else {
-        embed.setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() });
-      }
+  // Criar o embed
+  const embed = new EmbedBuilder()
+    .setTitle('📦 Inventory')
+    .setColor(0x00a8ff)
+    .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+    .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      const itemsText = formatItemsText(inventoryItems);
+  // CONFIGURAÇÃO DO AUTHOR (Avatar do Roblox)
+  if (robloxId) {
+    // Link que redireciona diretamente para a imagem PNG do busto do avatar
+    const avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${robloxId}&width=420&height=420&format=png`;
+    
+    embed.setAuthor({ 
+      name: interaction.user.username, 
+      iconURL: avatarUrl 
+    });
+  } else {
+    embed.setAuthor({ 
+      name: interaction.user.username, 
+      iconURL: interaction.user.displayAvatarURL() 
+    });
+  }
 
-      embed.addFields({ //fixar diamantes
-        name: `Items${diamonds > 0 ? ` + ${diamonds.toLocaleString()} 💎` : 'None'}`,
-        value: itemsText,
-        inline: true
-      });
+  // Restante do preenchimento do embed...
+  const itemsText = formatItemsText(inventoryItems);
+  embed.addFields({ 
+    name: `Items${diamonds > 0 ? ` + ${diamonds.toLocaleString()} 💎` : 'None'}`,
+    value: itemsText,
+    inline: true
+  });
 
-      embed.addFields({
-        name: 'Looking For',
-        value: lookingFor,
-        inline: true
-      });
+  embed.addFields({ name: 'Looking For', value: lookingFor, inline: true });
 
-      const now = new Date();
-      const timeStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} at ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      embed.addFields({
-        name: 'Last Edited',
-        value: timeStr,
-        inline: false
-      });
+  const now = new Date();
+  const timeStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} at ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  embed.addFields({ name: 'Last Edited', value: timeStr, inline: false });
 
-      const updateButton = new ButtonBuilder()
-        .setCustomId('inventory_update_button')
-        .setLabel('Update Inventory')
-        .setStyle(ButtonStyle.Primary);
+  // Botões e envio...
+  const updateButton = new ButtonBuilder()
+    .setCustomId('inventory_update_button')
+    .setLabel('Update Inventory')
+    .setStyle(ButtonStyle.Primary);
 
-      const row = new ActionRowBuilder().addComponents(updateButton);
+  const row = new ActionRowBuilder().addComponents(updateButton);
+  const targetChannel = redirectInventoryChannelId ? interaction.guild.channels.cache.get(redirectInventoryChannelId) : interaction.channel;
+  const message = await targetChannel.send({ embeds: [embed], components: [row] });
 
-      const targetChannel = redirectInventoryChannelId ? interaction.guild.channels.cache.get(redirectInventoryChannelId) : interaction.channel;
-      const message = await targetChannel.send({ embeds: [embed], components: [row] });
+  // Salvar dados
+  const inventoryData = {
+    messageId: message.id,
+    channelId: targetChannel.id,
+    items: inventoryItems,
+    diamonds: diamonds,
+    lookingFor: lookingFor,
+    robloxUsername: robloxInput, // guarda o que o user digitou
+    lastEdited: now
+  };
+  inventories.set(interaction.user.id, inventoryData);
+}
 
-      const inventoryData = {
-        messageId: message.id,
-        channelId: targetChannel.id,
-        items: inventoryItems,
-        diamonds: diamonds,
-        lookingFor: lookingFor,
-        robloxUsername: robloxUsername,
-        lastEdited: now
-      };
+// FUNÇÃO AUXILIAR (Coloque fora do evento de interação)
+async function getRobloxId(username) {
+  try {
+    const response = await fetch("https://users.roblox.com/v1/usernames/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usernames: [username], excludeBannedUsers: true })
+    });
+    const data = await response.json();
+    return data.data && data.data.length > 0 ? data.data[0].id : null;
+  } catch (e) {
+    return null;
+  }
 
       inventories.set(interaction.user.id, inventoryData);
 
