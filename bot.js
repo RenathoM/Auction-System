@@ -2960,8 +2960,8 @@ client.on('interactionCreate', async (interaction) => {
 
       const itemsText = formatItemsText(inventoryItems);
 
-      embed.addFields({
-        name: `Items${diamonds > 0 ? ` + ${diamonds} 💎` : ''}`,
+      embed.addFields({ //fixar diamantes
+        name: `Items${diamonds > 0 ? ` + ${diamonds.toLocaleString()} 💎` : 'None'}`,
         value: itemsText,
         inline: true
       });
