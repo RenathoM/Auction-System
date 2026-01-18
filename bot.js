@@ -484,6 +484,10 @@ client.once('ready', async () => {
       description: 'Show giveaway setup information (admin only)'
     },
     {
+      name: 'savedata',
+      description: 'Manually save all bot data to Redis (admin only)'
+    },
+    {
       name: 'botcmds',
       description: 'View all available bot commands'
     },
@@ -1098,6 +1102,21 @@ client.on('interactionCreate', async (interaction) => {
         );
 
       await interaction.reply({ embeds: [embed], components: [row] });
+    }
+
+    if (commandName === 'savedata') {
+      // Check if user has admin permissions (you can adjust this check)
+      if (!interaction.member.permissions.has('Administrator')) {
+        return interaction.reply({ content: '❌ You need Administrator permissions to use this command.', ephemeral: true });
+      }
+
+      try {
+        await saveData();
+        await interaction.reply({ content: '✅ All bot data has been successfully saved to Redis!', ephemeral: true });
+      } catch (error) {
+        console.error('Error saving data:', error);
+        await interaction.reply({ content: '❌ An error occurred while saving data.', ephemeral: true });
+      }
     }
 
     if (commandName === 'botcmds') {
@@ -3597,7 +3616,7 @@ async function getRobloxAvatarUrl(userId) {
       const currentCount = userTradeCount.get(interaction.user.id) || 0;
       userTradeCount.set(interaction.user.id, currentCount + 1);
 
-      await interaction.reply({ content: `Trade offer created! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
+      await interaction.reply({ content: `Trade offer created in ${targetChannel}! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
       return;
     }
 
@@ -3636,7 +3655,7 @@ async function getRobloxAvatarUrl(userId) {
       // Notify host of new offer
       const channel = interaction.guild.channels.cache.get(trade.channelId);
       if (channel) {
-        await channel.send(`📢 ${trade.host}, você recebeu uma oferta de ${interaction.user}!`);
+        await channel.send(`📢 ${trade.host}, you received an offer from ${interaction.user}!`);
       }
 
       await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
