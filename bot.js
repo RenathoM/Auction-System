@@ -29,7 +29,7 @@ const itemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElecticUnicorn', 'HugeRainbowElectricUnicorn'],
+	'Unicorn Huges': ['HugeElectricUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
