@@ -1495,7 +1495,7 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`Commands List (Page ${pageIndex + 1}/${pages.length})`)
           .addFields(page.fields)
           .setFooter({ text: `Page ${pageIndex + 1}/${pages.length} | Made By Atlas` })
-          .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+          .setThumbnail('https://media.discordapp.net/attachments/1461506733833846958/1462497977888280819/AuctionGif_1.gif?ex=696e68e1&is=696d1761&hm=cfc43df2b6ffe3b1bcaf20feb70b5e4ce5b85c2d061aa129ffdb55f8cf3e3e6c&=&width=1593&height=902');
       };
 
       const createButtons = (pageIndex) => {
