@@ -74,11 +74,10 @@ const itemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElectricUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg', 'UnicornEgg'],
@@ -94,11 +93,10 @@ const giveawayItemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElectricUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg', 'UnicornEgg'],
@@ -108,13 +106,6 @@ const giveawayItemCategories = {
 // Item emojis mapping - customize with your server emojis
 const itemEmojis = {
   //Huges
-  'HugeElectricUnicorn': '<:HugeElectricUnicorn:1462294295057793186>',
-  'HugeRainbowElectricUnicorn': '📦', //'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony'
-
-  'HugeStormAgony': '<:HugeStormAgony:1462294256218673515>',
-  'HugeGoldenStormAgony': '📦', //'HugeGoldenStormAgony': '<:HugeGoldenStormAgony:0000000000000000000>',
-  'HugeRainbowStormAgony': '📦',
-	
   'HugeBlackHoleAngelus': '<:HugeBlackHoleAngelus:1461868865758695646>',
   'HugeRainbowBlackHoleAngelus': '📦',
   'HugeSnowGlobeHamster': '<:HugeSnowGlobeHamster:1461512580970618881>',
@@ -531,6 +522,20 @@ client.once('ready', async () => {
     {
       name: 'savedata',
       description: 'Manually save all bot data to Redis (admin only)'
+    },
+    {
+      name: 'clearbotmessages',
+      description: 'Delete bot messages in this channel (admin only)',
+      options: [
+        {
+          name: 'amount',
+          type: ApplicationCommandOptionType.Integer,
+          description: 'Number of bot messages to delete (1-100)',
+          required: true,
+          min_value: 1,
+          max_value: 100
+        }
+      ]
     },
     {
       name: 'botcmds',
@@ -1201,6 +1206,51 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
+    if (commandName === 'clearbotmessages') {
+      // Check if user has admin role
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+
+      const amount = interaction.options.getInteger('amount');
+      
+      try {
+        await interaction.deferReply({ ephemeral: true });
+        
+        // Fetch messages from the channel
+        const messages = await interaction.channel.messages.fetch({ limit: 100 });
+        
+        // Filter bot messages
+        const botMessages = messages.filter(msg => msg.author.id === client.user.id);
+        
+        // Get the specified amount of bot messages
+        const messagesToDelete = botMessages.first(amount);
+        
+        if (messagesToDelete.length === 0) {
+          return interaction.editReply({ content: '❌ No bot messages found in this channel.' });
+        }
+        
+        // Delete the messages
+        let deletedCount = 0;
+        for (const message of messagesToDelete) {
+          try {
+            await message.delete();
+            deletedCount++;
+          } catch (error) {
+            console.error(`Failed to delete message ${message.id}:`, error);
+          }
+        }
+        
+        await interaction.editReply({ 
+          content: `✅ Successfully deleted ${deletedCount} bot message(s) out of ${amount} requested.` 
+        });
+        
+      } catch (error) {
+        console.error('Error clearing bot messages:', error);
+        await interaction.editReply({ content: '❌ An error occurred while clearing bot messages.' });
+      }
+    }
+
     if (commandName === 'botcmds') {
       const pages = [
         {
@@ -1241,6 +1291,7 @@ client.on('interactionCreate', async (interaction) => {
           fields: [
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
             { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
+            { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
@@ -1340,6 +1391,7 @@ client.on('interactionCreate', async (interaction) => {
           fields: [
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
             { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
+            { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
