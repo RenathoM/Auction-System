@@ -226,10 +226,88 @@ function formatItemsList(items) {
   }).join('\n');
 }
 
-// Save data every 5 minutes
+// Save data every 5 minutes and reload without losing active embeds
 setInterval(async () => {
-  await saveData();
+  await saveAndReloadData();
 }, 5 * 60 * 1000);
+
+async function saveAndReloadData() {
+  try {
+    console.log('Starting auto save and reload...');
+    
+    // First, save current data
+    await saveData();
+    
+    // Store current active data before loading
+    const currentTrades = new Map(trades);
+    const currentAuctions = new Map(auctions);
+    const currentGiveaways = new Map(giveaways);
+    const currentInventories = new Map(inventories);
+    const currentUserTradeCount = new Map(userTradeCount);
+    const currentUserGiveawayCount = new Map(userGiveawayCount);
+    const currentFinishedAuctions = new Map(finishedAuctions);
+    const currentFinishedGiveaways = new Map(finishedGiveaways);
+    
+    // Load data from Redis
+    await loadData();
+    
+    // Merge data - keep current active data, only add missing data
+    // For trades, auctions, giveaways - keep current active ones, add any missing from Redis
+    for (const [key, value] of currentTrades) {
+      if (!trades.has(key)) {
+        trades.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentAuctions) {
+      if (!auctions.has(key)) {
+        auctions.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentGiveaways) {
+      if (!giveaways.has(key)) {
+        giveaways.set(key, value);
+      }
+    }
+    
+    // For inventories, user counts, and finished items - merge both ways
+    for (const [key, value] of currentInventories) {
+      if (!inventories.has(key)) {
+        inventories.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentUserTradeCount) {
+      if (!userTradeCount.has(key)) {
+        userTradeCount.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentUserGiveawayCount) {
+      if (!userGiveawayCount.has(key)) {
+        userGiveawayCount.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentFinishedAuctions) {
+      if (!finishedAuctions.has(key)) {
+        finishedAuctions.set(key, value);
+      }
+    }
+    
+    for (const [key, value] of currentFinishedGiveaways) {
+      if (!finishedGiveaways.has(key)) {
+        finishedGiveaways.set(key, value);
+      }
+    }
+    
+    console.log('Auto save and reload completed successfully - active embeds preserved');
+    
+  } catch (error) {
+    console.error('Error in auto save and reload:', error);
+  }
+}
 
 async function saveData() {
   try {
@@ -582,10 +660,10 @@ client.on('messageCreate', async (message) => {
       // Create proof embed
       proofEmbed = new EmbedBuilder()
         .setTitle('🔄 Trade Proof')
-        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** ${trade.host}\n**Guest:** ${trade.acceptedUser}\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** ${trade.host.displayName || trade.host.username}\n**Guest:** ${trade.acceptedUser.displayName || trade.acceptedUser.username}\n\n**Note:** ${proofData.description || 'No description provided'}`)
         .setColor(0x0099ff)
         .setImage(attachment.url)
-        .setFooter({ text: `Submitted by ${message.author.username}` })
+        .setFooter({ text: `Submitted by ${message.author.displayName || message.author.username}` })
         .setTimestamp();
     } else if (proofData.type === 'auction') {
       const auctionProofChannelId = '1461849894615646309';
@@ -1109,7 +1187,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       trades.delete(messageId);
-      interaction.reply({ content: `Trade from ${trade.host} has been deleted.`, ephemeral: true });
+      interaction.reply({ content: `Trade from ${trade.host.displayName || trade.host.username} has been deleted.`, ephemeral: true });
     }
 
     if (commandName === 'accepttrade') {
@@ -1920,7 +1998,7 @@ client.on('interactionCreate', async (interaction) => {
       // Update embed and ping both users
       await updateTradeEmbed(interaction.guild, trade, messageId);
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`✅ Trade accepted! ${trade.host} and ${lastOffer.user}, your trade has been accepted.`);
+      await channel.send(`✅ Trade accepted! ${trade.host.displayName || trade.host.username} and ${lastOffer.user.displayName || lastOffer.user.username}, your trade has been accepted.`);
 
       await interaction.reply({ content: 'Trade accepted!', ephemeral: true });
     }
@@ -1938,7 +2016,7 @@ client.on('interactionCreate', async (interaction) => {
       // Update embed
       await updateTradeEmbed(interaction.guild, trade, messageId);
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`❌ Trade offer from ${lastOffer.user} has been declined.`);
+      await channel.send(`❌ Trade offer from ${lastOffer.user.displayName || lastOffer.user.username} has been declined.`);
 
       await interaction.reply({ content: 'Offer declined!', ephemeral: true });
     }
@@ -3707,7 +3785,7 @@ async function getRobloxAvatarUrl(userId) {
       // Create trade embed
       const embed = new EmbedBuilder()
         .setTitle('Trade Offer')
-        .setDescription(`**Host:** ${interaction.user}\n**Status:** Waiting for offers`)
+        .setDescription(`**Host:** ${interaction.member.displayName}\n**Status:** Waiting for offers`)
         .setColor(0x0099ff)
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
@@ -3793,7 +3871,7 @@ async function getRobloxAvatarUrl(userId) {
       // Notify host of new offer
       const channel = interaction.guild.channels.cache.get(trade.channelId);
       if (channel) {
-        await channel.send(`📢 ${trade.host}, you received an offer from ${interaction.user}!`);
+        await channel.send(`📢 ${trade.host.displayName || trade.host.username}, you received an offer from ${interaction.user.displayName || interaction.user.username}!`);
       }
 
       await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
@@ -4080,14 +4158,14 @@ async function updateTradeEmbed(guild, trade, messageId) {
 
     if (trade.accepted) {
       if (trade.adminCancelled) {
-        embed.setDescription(`**Status:** ❌ Cancelled by an admin\n\n**Host:** ${trade.host}`);
+        embed.setDescription(`**Status:** ❌ Cancelled by an admin\n\n**Host:** ${trade.host.displayName || trade.host.username}`);
       } else {
-        embed.setDescription(`**Status:** ✅ Trade Accepted\n\n**Host:** ${trade.host}\n**Guest:** ${trade.acceptedUser}`);
+        embed.setDescription(`**Status:** ✅ Trade Accepted\n\n**Host:** ${trade.host.displayName || trade.host.username}\n**Guest:** ${trade.acceptedUser.displayName || trade.acceptedUser.username}`);
       }
     } else if (trade.offers.length > 0) {
-      embed.setDescription(`**Status:** Awaiting Host Decision\n\n**Host:** ${trade.host}`);
+      embed.setDescription(`**Status:** Awaiting Host Decision\n\n**Host:** ${trade.host.displayName || trade.host.username}`);
     } else {
-      embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** ${trade.host}`);
+      embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** ${trade.host.displayName || trade.host.username}`);
     }
 
     const hostItemsText = formatItemsText(trade.hostItems);
@@ -4101,7 +4179,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
       const lastOffer = trade.offers[trade.offers.length - 1];
       const guestItemsText = formatItemsText(lastOffer.items);
       embed.addFields({
-        name: `${lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${lastOffer.diamonds} 💎)` : ''}`,
+        name: `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${lastOffer.diamonds} 💎)` : ''}`,
         value: guestItemsText,
         inline: true
       });
@@ -4110,7 +4188,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
       if (acceptedOffer) {
         const guestItemsText = formatItemsText(acceptedOffer.items);
         embed.addFields({
-          name: `${acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${acceptedOffer.diamonds} 💎)` : ''}`,
+          name: `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${acceptedOffer.diamonds} 💎)` : ''}`,
           value: guestItemsText,
           inline: true
         });
