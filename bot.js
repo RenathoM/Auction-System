@@ -3021,14 +3021,14 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`Loading Roblox avatar for user ${interaction.user.username} with ID ${robloxId}: ${avatarUrl}`);
       
       embed.setAuthor({ 
-        name: interaction.user.username, 
+        name: interaction.member.displayName, 
         iconURL: avatarUrl 
       });
     } else {
       // Se falhar em pegar o avatar do Roblox, usa o avatar do Discord
       console.log(`Failed to fetch Roblox avatar for ID ${robloxId}, using Discord avatar`);
       embed.setAuthor({ 
-        name: interaction.user.username, 
+        name: interaction.member.displayName, 
         iconURL: interaction.user.displayAvatarURL() 
       });
     }
@@ -3037,7 +3037,7 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`Failed to load Roblox avatar for username: ${robloxInput} (resolved ID: ${robloxId})`);
     }
     embed.setAuthor({ 
-      name: interaction.user.username, 
+      name: interaction.member.displayName, 
       iconURL: interaction.user.displayAvatarURL() 
     });
   }
