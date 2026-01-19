@@ -2573,9 +2573,28 @@ client.on('interactionCreate', async (interaction) => {
             label: `${item.name} (x${item.quantity})`, 
             value: idx.toString()
           })));
-
+		
         const row = new ActionRowBuilder().addComponents(itemSelect);
-        await interaction.reply({ content: 'Select items to remove:', components: [row], flags: 64 });
+		 // Around line 2578 in bot.js
+		const itemsToRemove = auction.items; // Or however you retrieve the list
+		
+		if (!itemsToRemove || itemsToRemove.length === 0) {
+		    return await interaction.reply({ 
+		        content: 'There are no items to remove from this auction.', 
+		        flags: MessageFlags.Ephemeral 
+		    });
+		}
+		
+		// Ensure max_values is at least 1 and no more than the length of options
+		const selectMenu = new StringSelectMenuBuilder()
+		    .setCustomId('remove_items_select')
+		    .setPlaceholder('Select items to remove')
+		    .setMinValues(1)
+		    .setMaxValues(Math.max(1, itemsToRemove.length)) // Fixes the NUMBER_TYPE_MIN error
+		    .addOptions(itemsToRemove.map((item, index) => ({
+		        label: item.slice(0, 100), // Discord limit is 100 chars
+		        value: index.toString()
+		    })));
       } else if (choice === 'confirm_items') {
         // Check if diamonds are already added as items
         const hasDiamonds = (interaction.user.tradeItems || []).some(item => item.name === '💎 Diamonds');
@@ -4016,6 +4035,20 @@ async function getRobloxAvatarUrl(userId) {
       if (diamondsStr && diamondsStr !== '0') {
         diamonds = parseBid(diamondsStr);
       }
+		
+	// Example fix for line 4037
+	const embed = new EmbedBuilder()
+		.setTitle('Auction Update')
+		.addFields(
+			{ 
+				name: 'Winner', 
+				value: winner?.user?.toString() || 'No Winner' // Fallback if winner is null
+			},
+			{ 
+				name: 'Items', 
+				value: auction.items?.join(', ') || 'No items listed' // Fallback if empty
+			}
+		);
 
       const hostItems = interaction.user.tradeItems || [];
       delete interaction.user.tradeItems;
