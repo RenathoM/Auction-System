@@ -1899,45 +1899,45 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Giveaway ended!', flags: MessageFlags.Ephemeral });
     }
 
-    // if (interaction.customId === 'trade_page_prev' || interaction.customId === 'trade_page_next') {
-    //   const currentPage = interaction.user.currentTradePage || 1;
-    //   const totalPages = Math.ceil(interaction.user.tradeItems.length / 15);
-    //   let newPage = currentPage;
-    //   if (interaction.customId === 'trade_page_prev' && currentPage > 1) newPage--;
-    //   if (interaction.customId === 'trade_page_next' && currentPage < totalPages) newPage++;
-    //   interaction.user.currentTradePage = newPage;
+     if (interaction.customId === 'trade_page_prev' || interaction.customId === 'trade_page_next') {
+       const currentPage = interaction.user.currentTradePage || 1;
+       const totalPages = Math.ceil(interaction.user.tradeItems.length / 15);
+       let newPage = currentPage;
+       if (interaction.customId === 'trade_page_prev' && currentPage > 1) newPage--;
+       if (interaction.customId === 'trade_page_next' && currentPage < totalPages) newPage++;
+       interaction.user.currentTradePage = newPage;
 
-    //   const ITEMS_PER_PAGE = 15;
-    //   const start = (newPage - 1) * ITEMS_PER_PAGE;
-    //   const end = start + ITEMS_PER_PAGE;
-    //   const pageItems = interaction.user.tradeItems.slice(start, end);
-    //   const itemsList = formatItemsList(pageItems);                                         //\nWhat would you like to do?
-    //   const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
+       const ITEMS_PER_PAGE = 15;
+       const start = (newPage - 1) * ITEMS_PER_PAGE;
+       const end = start + ITEMS_PER_PAGE;
+       const pageItems = interaction.user.tradeItems.slice(start, end);
+       const itemsList = formatItemsList(pageItems);                                         //\nWhat would you like to do?
+       const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
 
-    //   const embed = new EmbedBuilder().setDescription(description);
+       const embed = new EmbedBuilder().setDescription(description);
 
-    //   const continueSelect = new StringSelectMenuBuilder()
-    //     .setCustomId('trade_continue_select')
-    //     .setPlaceholder('What would you like to do?')
-    //     .addOptions([
-    //       { label: '✅ Confirm and Proceed', value: 'confirm_items' },
-    //       { label: '➕ Add Another Category', value: 'add_category' },
-    //       { label: '❌ Remove Items', value: 'remove_items' }
-    //     ]);
+       const continueSelect = new StringSelectMenuBuilder()
+         .setCustomId('trade_continue_select')
+         .setPlaceholder('What would you like to do?')
+         .addOptions([
+           { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+           { label: '➕ Add Another Category', value: 'add_category' },
+           { label: '❌ Remove Items', value: 'remove_items' }
+         ]);
 
-    //   const row = new ActionRowBuilder().addComponents(continueSelect);
-    //   const components = [row];
-    //   if (totalPages > 1) {
-    //     const paginationRow = new ActionRowBuilder().addComponents(
-    //       new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
-    //       new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
-    //     );
-    //     components.push(paginationRow);
-    //   }
+       const row = new ActionRowBuilder().addComponents(continueSelect);
+       const components = [row];
+       if (totalPages > 1) {
+         const paginationRow = new ActionRowBuilder().addComponents(
+           new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+           new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+         );
+         components.push(paginationRow);
+       }
 
-    //   await interaction.update({ embeds: [embed], components });
-    //   return;
-    // }
+       await interaction.update({ embeds: [embed], components });
+       return;
+     }
       const currentPage = interaction.user.currentInventoryPage || 1;
       const totalPages = Math.ceil(interaction.user.inventoryItems.length / 15);
       let newPage = currentPage;
@@ -2017,7 +2017,11 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    if (interaction.customId.startsWith('offer_page_prev_') || interaction.customId.startsWith('offer_page_next_')) {
+    if (interaction.customId && (interaction.customId.startsWith('offer_page_prev_') || interaction.customId.startsWith('offer_page_next_'))) {
+      if (!interaction.user || !interaction.user.offerTradeItems) {
+        return interaction.reply({ content: 'Session expired. Please start over.', flags: MessageFlags.Ephemeral });
+      }
+
       const messageId = interaction.customId.split('_').pop();
       const currentPage = interaction.user.currentOfferPage || 1;
       const totalPages = Math.ceil(interaction.user.offerTradeItems.length / 15);
