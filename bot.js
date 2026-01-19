@@ -1,7 +1,7 @@
 const { ReadableStream } = require('web-streams-polyfill');
 global.ReadableStream = ReadableStream;
 
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder, userMention } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
 const redis = require('redis');
@@ -51,6 +51,316 @@ const redisClient = redis.createClient({
 
 redisClient.on('error', (err) => console.error('Redis Client Error', err));
 redisClient.connect();
+
+// Error logging system
+const ERROR_LOG_CHANNEL = '1462804742366298112';
+const ERROR_CODES = {
+  // Permission errors (01-05)
+  'E01': 'You do not have permission to use this command',
+  'E02': 'Only the auction host can perform this action',
+  'E03': 'Only the trade host can perform this action',
+  'E04': 'You cannot make offers on your own trade',
+  'E05': 'Only administrators can use this command',
+  
+  // Trade errors (06-15)
+  'E06': 'You cannot create a trade with more than 100 items',
+  'E07': 'No trade found with that ID',
+  'E08': 'Trade already accepted by another user',
+  'E09': 'Invalid trade offer',
+  'E10': 'Trade has expired',
+  'E11': 'You must select at least one item',
+  'E12': 'Maximum quantity exceeded for this item',
+  'E13': 'Insufficient diamonds',
+  'E14': 'Cannot add more items to this trade',
+  'E15': 'Invalid offer amount',
+  
+  // Auction errors (16-25)
+  'E16': 'No auction running in this channel',
+  'E17': 'Auction has already started',
+  'E18': 'Auction has expired',
+  'E19': 'Bid must be higher than current bid',
+  'E20': 'Invalid bid amount',
+  'E21': 'Cannot bid on your own auction',
+  'E22': 'Auction already has a winner',
+  'E23': 'No bids placed on this auction',
+  'E24': 'Cannot accept an offer without bids',
+  'E25': 'Auction setup requires valid parameters',
+  
+  // Inventory errors (26-35)
+  'E26': 'Inventory not found',
+  'E27': 'Item not found in inventory',
+  'E28': 'Cannot remove item from inventory',
+  'E29': 'Inventory is empty',
+  'E30': 'Invalid inventory data',
+  'E31': 'Cannot edit another user\'s inventory',
+  'E32': 'Item quantity must be at least 1',
+  'E33': 'Maximum items reached (100)',
+  'E34': 'Inventory update failed',
+  'E35': 'Cannot transfer items',
+  
+  // Giveaway errors (36-45)
+  'E36': 'No giveaway found',
+  'E37': 'Giveaway has expired',
+  'E38': 'You already entered this giveaway',
+  'E39': 'Giveaway setup requires valid parameters',
+  'E40': 'Cannot end giveaway that hasn\'t started',
+  'E41': 'No entries in this giveaway',
+  'E42': 'Giveaway already ended',
+  'E43': 'Invalid giveaway configuration',
+  'E44': 'Cannot join your own giveaway',
+  'E45': 'Giveaway item limit exceeded',
+  
+  // System errors (46-55)
+  'E46': 'Failed to save data to Redis',
+  'E47': 'Failed to load data from Redis',
+  'E48': 'Database connection error',
+  'E49': 'Invalid command parameters',
+  'E50': 'An unexpected error occurred. Please try again later',
+  'E51': 'Message not found',
+  'E52': 'Channel not found',
+  'E53': 'User not found',
+  'E54': 'Operation timed out',
+  'E55': 'Rate limit exceeded - try again in a moment',
+  
+  // File upload errors (56-60)
+  'E56': 'Please upload an image file',
+  'E57': 'Trade proof channel not found',
+  'E58': 'Trade no longer exists',
+  'E59': 'Auction proof channel not found',
+  'E60': 'Auction no longer exists',
+  
+  // Giveaway proof errors (61-65)
+  'E61': 'Giveaway proof channel not found',
+  'E62': 'Giveaway no longer exists',
+  'E63': 'Invalid proof type',
+  'E64': 'No bot messages found in this channel',
+  'E65': 'An error occurred while clearing bot messages',
+  
+  // Additional errors (66-80)
+  'E66': 'Trade offer has been declined',
+  'E67': 'Please use the file upload feature. Reply to this message with an image attachment',
+  'E68': 'Please provide a valid image URL',
+  'E69': 'Giveaway channel not found',
+  'E70': 'Giveaway message not found',
+  'E71': 'Error processing proof image',
+  'E72': 'Only the host or admin can perform this action',
+  'E73': 'Since there\'s already a bid with only diamonds, you can only add items to your bid',
+  'E74': 'An auction is already running in the server. Please wait for it to end',
+  'E75': 'Redirect channel not found',
+  'E76': 'Please enter a valid amount of diamonds',
+  'E77': 'Invalid model. Use diamonds, items/offer, or both',
+  'E78': 'Invalid starting price',
+  'E79': 'Your bid must be higher than the current highest bid',
+  'E80': 'Please provide exactly the correct number of quantities',
+  
+  // Critical missing error codes (81-85)
+  'E81': 'You have reached your maximum trade creation limit',
+  'E82': 'You have reached your maximum auction creation limit',
+  'E83': 'You have reached your maximum giveaway creation limit',
+  'E84': 'No items available to remove',
+  'E85': 'Invalid duration. Please enter a valid time format'
+};
+
+// Bot Logs System
+const botLogs = {
+  logs: [],
+  addLog: function(type, message, userId = null, details = {}) {
+    const logEntry = {
+      id: this.logs.length + 1,
+      type,
+      message,
+      userId,
+      timestamp: new Date().toISOString(),
+      details
+    };
+    this.logs.push(logEntry);
+    // Keep only last 100 logs
+    if (this.logs.length > 100) {
+      this.logs.shift();
+    }
+    return logEntry;
+  },
+  getLogs: function(type = null, limit = 10) {
+    let filtered = this.logs;
+    if (type) {
+      filtered = filtered.filter(log => log.type === type);
+    }
+    return filtered.slice(-limit).reverse();
+  }
+};
+
+// Error frequency tracker for multiple errors in short time
+const errorFrequency = new Map();
+const MULTIPLE_ERROR_THRESHOLD = 60000; // 60 seconds
+const ALERT_CHANNEL = '1461506733833846958';
+const ALERT_USER = '566300801476329472';
+
+// Proof upload tracking system (for timeouts)
+const proofUploadTracking = new Map(); // messageId -> { type, hostId, guestId, reminderCount, reminderTimestamp }
+
+const PROOF_UPLOAD_TIMEOUT = 180000; // 3 minutes
+const PROOF_REMINDER_INTERVAL = 60000; // 1 minute between reminders
+const PROOF_MAX_REMINDERS = 3; // Maximum 3 reminders
+
+// Item count validation system
+const itemCountTracking = new Map(); // userId -> { offerTradeCount, inventoryCount, giveawayCount, tradeOfferCount, timestamp }
+
+// Function to track item count when added to menu
+function trackItemCount(userId, itemType, count) {
+  if (!itemCountTracking.has(userId)) {
+    itemCountTracking.set(userId, {});
+  }
+  
+  const userTracking = itemCountTracking.get(userId);
+  userTracking[itemType] = count;
+  userTracking.timestamp = Date.now();
+}
+
+// Function to validate item count when sent to embed
+async function validateItemCount(interaction, itemType, receivedCount, itemsList) {
+  const userTracking = itemCountTracking.get(interaction.user.id);
+  
+  if (!userTracking || userTracking[itemType] === undefined) {
+    return true; // First time, no validation needed
+  }
+  
+  const expectedCount = userTracking[itemType];
+  
+  if (receivedCount !== expectedCount) {
+    // CRITICAL ERROR: Item count mismatch
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('🚨 CRITICAL ITEM COUNT MISMATCH')
+      .setDescription('**Possible manipulation attempt detected!**')
+      .addFields(
+        { name: '**USER**', value: `${interaction.user.tag} (${interaction.user.id})`, inline: false },
+        { name: '**ITEM TYPE**', value: `\`\`\`${itemType}\`\`\``, inline: true },
+        { name: '**EXPECTED COUNT**', value: `\`\`\`${expectedCount}\`\`\``, inline: true },
+        { name: '**RECEIVED COUNT**', value: `\`\`\`${receivedCount}\`\`\``, inline: true },
+        { name: '**DIFFERENCE**', value: `\`\`\`${receivedCount - expectedCount}\`\`\``, inline: true },
+        { name: '**ITEMS RECEIVED**', value: `\`\`\`${JSON.stringify(itemsList.slice(0, 10)).substring(0, 1024)}\`\`\``, inline: false },
+        { name: '**TIMESTAMP**', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+        { name: '**GUILD ID**', value: `\`\`\`${interaction.guild.id}\`\`\``, inline: true }
+      );
+    
+    try {
+      const logChannel = await client.channels.fetch(ERROR_LOG_CHANNEL).catch(() => null);
+      if (logChannel) {
+        await logChannel.send({ 
+          content: `<@${ALERT_USER}> **SECURITY ALERT**`,
+          embeds: [errorEmbed] 
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send item count validation error:', error);
+    }
+    
+    return false;
+  }
+  
+  return true;
+}
+
+// Function to log errors to Discord channel
+async function logError(interaction, errorCode, errorMessage, context = {}) {
+  try {
+    const channel = await client.channels.fetch(ERROR_LOG_CHANNEL).catch(() => null);
+    if (!channel) return;
+    
+    const embed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('⚠️ Error Report')
+      .addFields(
+        { name: 'User', value: `${userMention(interaction.user.id)} (${interaction.user.id})`, inline: true },
+        { name: 'Error Code', value: `\`${errorCode}\``, inline: true },
+        { name: 'Message', value: errorMessage || 'No additional info', inline: false },
+        { name: 'Data', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+      );
+    
+    if (context.commandName) embed.addFields({ name: 'Command', value: context.commandName, inline: true });
+    if (context.channelId) embed.addFields({ name: 'Channel', value: `<#${context.channelId}>`, inline: true });
+    if (Object.keys(context).length > 0 && !context.commandName && !context.channelId) {
+      embed.addFields({ name: 'Context', value: JSON.stringify(context).substring(0, 1024), inline: false });
+    }
+    
+    await channel.send({ embeds: [embed] });
+    
+    // Track error frequency for multiple occurrences
+    trackErrorFrequency(errorCode);
+  } catch (error) {
+    console.error('Failed to log error to Discord:', error);
+  }
+}
+
+// Function to track error frequency and alert on multiple occurrences
+async function trackErrorFrequency(errorCode) {
+  const now = Date.now();
+  
+  if (!errorFrequency.has(errorCode)) {
+    errorFrequency.set(errorCode, []);
+  }
+  
+  const errorList = errorFrequency.get(errorCode);
+  
+  // Remove timestamps older than 60 seconds
+  const recentErrors = errorList.filter(entry => now - entry.timestamp < MULTIPLE_ERROR_THRESHOLD);
+  recentErrors.push({ timestamp: now });
+  errorFrequency.set(errorCode, recentErrors);
+  
+  const errorCount = recentErrors.length;
+  
+  // Alert if 4-15 errors occurred in less than 60 seconds
+  if (errorCount >= 4 && errorCount <= 15) {
+    try {
+      const alertChannel = await client.channels.fetch(ALERT_CHANNEL).catch(() => null);
+      if (!alertChannel) return;
+      
+      const alertEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('🚨 **MULTIPLE ERROR ALERT**')
+        .setThumbnail('https://media.discordapp.net/attachments/1461506733833846958/1462838334207557693/75e6b309-4e2b-48c6-9046-23df37b6c836.gif?ex=696fa5dd&is=696e545d&hm=00a95ab257adb2f266094f7f1eeae4f094c01d1f564402575b0897947601635b&=&width=1006&height=1006')
+        .addFields(
+          { name: '**ERROR CODE**', value: `\`\`\`${errorCode}\`\`\``, inline: true },
+          { name: '**OCCURRENCES**', value: `\`\`\`${errorCount}\`\`\``, inline: true },
+          { name: '**DESCRIPTION**', value: `\`\`\`${ERROR_CODES[errorCode] || 'UNKNOWN ERROR'}\`\`\``, inline: false }
+        )
+        .addFields(
+          { name: '**TIME WINDOW**', value: '**LAST 60 SECONDS**', inline: true },
+          { name: '**STATUS**', value: '**CRITICAL**', inline: true }
+        )
+        .addFields(
+          { name: '**DASHBOARD**', value: '[CLICK HERE TO VIEW](https://railway.com/project/cef07fa9-9987-475d-bced-8e18f568a7e4?environmentId=fde4a8a9-a67d-409f-be0f-d06e1818f2cb)', inline: false }
+        );
+      
+      await alertChannel.send({ 
+        content: `<@${ALERT_USER}>`,
+        embeds: [alertEmbed] 
+      });
+    } catch (error) {
+      console.error('Failed to send error frequency alert:', error);
+    }
+  }
+}
+
+// Function to send user-friendly error message
+async function sendErrorReply(interaction, errorCode, customMessage = null) {
+  const message = customMessage || ERROR_CODES[errorCode] || 'An error occurred';
+  const formattedMessage = `${message} | Error (\`${errorCode}\`)`;
+  
+  try {
+    if (interaction.deferred) {
+      await interaction.editReply({ content: `⚠️ ${formattedMessage}`, flags: MessageFlags.Ephemeral });
+    } else if (interaction.replied) {
+      await interaction.followUp({ content: `⚠️ ${formattedMessage}`, flags: MessageFlags.Ephemeral });
+    } else {
+      await interaction.reply({ content: `⚠️ ${formattedMessage}`, flags: MessageFlags.Ephemeral });
+    }
+  } catch (error) {
+    console.error('Failed to send error reply:', error);
+  }
+  
+  await logError(interaction, errorCode, formattedMessage);
+}
 
 let redirectChannelId = config.defaultAuctionChannelId || null;
 let redirectTradeChannelId = config.defaultTradeChannelId || null;
@@ -226,7 +536,7 @@ function formatItemsText(items) {
   // Format items with emoji and name
   if (!items || items.length === 0) return 'None';
   
-  return items.map(item => {
+  const text = items.map(item => {
     if (typeof item === 'object') {
       // Special handling for Diamonds - use formatBid for abbreviations
       if (item.name === '💎 Diamonds') {
@@ -243,6 +553,12 @@ function formatItemsText(items) {
       return `${emoji} **${formattedName}**`;
     }
   }).join('\n');
+
+  // Truncate if too long for Discord embed field (4096 limit)
+  if (text.length > 4000) {
+    return text.substring(0, 4000) + '...';
+  }
+  return text;
 }
 
 // Helper function to format items list with emoji and abbreviations
@@ -260,6 +576,380 @@ function formatItemsList(items) {
     const formattedName = formatItemName(item.name);
     return `${emoji} **${formattedName}** (x${item.quantity})`;
   }).join('\n');
+}
+
+// Helper function to paginate items for trade offer (max 10 items per page to avoid embed overflow)
+function paginateTradeItems(items, page = 1, itemsPerPage = 10) {
+  if (!items || items.length === 0) {
+    return { items: [], page: 1, totalPages: 1, text: 'None' };
+  }
+  
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const validPage = Math.max(1, Math.min(page, totalPages));
+  const start = (validPage - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  const pageItems = items.slice(start, end);
+  
+  const text = pageItems.map(item => {
+    if (item.name === '💎 Diamonds') {
+      const abbreviatedValue = formatBid(item.quantity);
+      return `💎 **Diamonds** (${abbreviatedValue} 💎)`;
+    }
+    
+    const emoji = getItemEmoji(item.name) || '';
+    const formattedName = formatItemName(item.name);
+    return `${emoji} **${formattedName}** (x${item.quantity})`;
+  }).join('\n');
+  
+  return { 
+    items: pageItems, 
+    page: validPage, 
+    totalPages: totalPages,
+    text: text,
+    hasMultiplePages: totalPages > 1
+  };
+}
+
+// Function to detect and log when items are lost between selection and posting
+function validateItemsNotLost(interaction, operationType, expectedCount, actualItems) {
+  if (expectedCount > 0 && (!actualItems || actualItems.length === 0)) {
+    // Items were lost! Send critical log
+    const errorMessage = `🚨 **ITEM LOSS DETECTED** 🚨\n` +
+      `**User:** <@${interaction.user.id}> (${interaction.user.id})\n` +
+      `**Operation:** ${operationType}\n` +
+      `**Expected Items:** ${expectedCount}\n` +
+      `**Actual Items:** 0\n` +
+      `**Time:** <t:${Math.floor(Date.now() / 1000)}:F>\n` +
+      `**Guild:** ${interaction.guild?.name} (${interaction.guild?.id})\n` +
+      `**Channel:** ${interaction.channel?.name} (${interaction.channel?.id})\n` +
+      `\n**Possible Cause:** Items array was cleared or deleted before posting embed`;
+    
+    // Log to console with red color indicator
+    console.error(`\n❌ CRITICAL: Item Loss Detected for user ${interaction.user.id} in ${operationType}\n`);
+    console.error(`Expected: ${expectedCount}, Got: 0\n`);
+    
+    // Send to error log channel
+    const errorLogChannelId = '1462804742366298112';
+    const client = interaction.client;
+    if (client && errorLogChannelId) {
+      const errorLogChannel = client.channels.cache.get(errorLogChannelId);
+      if (errorLogChannel) {
+        const embed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('🚨 Critical: Item Loss Detected')
+          .setDescription(errorMessage)
+          .setFooter({ text: `Timestamp: ${Date.now()}` });
+        
+        errorLogChannel.send({ embeds: [embed] }).catch(err => {
+          console.error('Failed to send item loss log:', err);
+        });
+      }
+    }
+    
+    return false;
+  }
+  return true;
+}
+
+// Helper function to add fields safely to embed (prevents invalid fields)
+// Tracking for addFieldSafely errors
+const addFieldSafelyErrors = [];
+const MAX_ERROR_LOG_SIZE = 100;
+
+// Helper function to safely add fields to embed with comprehensive error logging
+function addFieldSafely(embed, name, value, inline = false) {
+  const timestamp = Date.now();
+  const errorContext = {
+    timestamp: timestamp,
+    date: new Date(timestamp).toISOString(),
+    name: name,
+    value: value,
+    inline: inline,
+    errors: []
+  };
+
+  try {
+    // Validate field name
+    if (!name || name.toString().trim() === '') {
+      const errorMsg = 'Field name is empty or invalid';
+      errorContext.errors.push({
+        type: 'INVALID_NAME',
+        message: errorMsg,
+        value: name
+      });
+      console.warn(`[addFieldSafely] ${errorMsg}`, { name, value });
+      return false;
+    }
+
+    // Validate field value
+    let sanitizedValue = value;
+    if (!value || value.toString().trim() === '') {
+      sanitizedValue = 'None';
+      errorContext.errors.push({
+        type: 'EMPTY_VALUE',
+        message: 'Field value was empty, using default "None"',
+        originalValue: value
+      });
+    }
+
+    // Convert to string and validate type
+    try {
+      sanitizedValue = sanitizedValue.toString();
+    } catch (typeError) {
+      errorContext.errors.push({
+        type: 'TYPE_CONVERSION_ERROR',
+        message: `Failed to convert value to string: ${typeError.message}`,
+        originalValue: value,
+        error: typeError.message
+      });
+      console.error(`[addFieldSafely] Type conversion error`, { name, value, error: typeError.message });
+      return false;
+    }
+
+    // Truncate to Discord limits
+    const originalNameLength = name.toString().length;
+    const originalValueLength = sanitizedValue.length;
+    
+    name = name.toString().substring(0, 256);
+    sanitizedValue = sanitizedValue.substring(0, 1024);
+
+    if (originalNameLength > 256 || originalValueLength > 1024) {
+      errorContext.errors.push({
+        type: 'TRUNCATED',
+        message: 'Field was truncated to Discord limits',
+        originalNameLength: originalNameLength,
+        truncatedNameLength: name.length,
+        originalValueLength: originalValueLength,
+        truncatedValueLength: sanitizedValue.length
+      });
+      console.warn(`[addFieldSafely] Field truncated to Discord limits`, {
+        name: name.substring(0, 50) + '...',
+        originalNameLen: originalNameLength,
+        originalValueLen: originalValueLength
+      });
+    }
+
+    // Try to add field
+    try {
+      embed.addFields({ name, value: sanitizedValue, inline });
+      
+      // Log if there were warnings but success
+      if (errorContext.errors.length > 0) {
+        console.log(`[addFieldSafely] Field added with warnings:`, {
+          name: name.substring(0, 50),
+          warnings: errorContext.errors.length
+        });
+      }
+      
+      return true;
+    } catch (embedError) {
+      errorContext.errors.push({
+        type: 'EMBED_ADD_FAILED',
+        message: `EmbedBuilder.addFields() failed: ${embedError.message}`,
+        error: embedError.message,
+        stack: embedError.stack
+      });
+      
+      // Log to console with full context
+      console.error(`[addFieldSafely] CRITICAL: Failed to add field to embed`, {
+        name: name.substring(0, 100),
+        value: sanitizedValue.substring(0, 100),
+        inline: inline,
+        error: embedError.message,
+        errorCode: embedError.code
+      });
+      
+      // Add to error tracking
+      addFieldSafelyErrors.push(errorContext);
+      if (addFieldSafelyErrors.length > MAX_ERROR_LOG_SIZE) {
+        addFieldSafelyErrors.shift();
+      }
+      
+      return false;
+    }
+  } catch (unexpectedError) {
+    errorContext.errors.push({
+      type: 'UNEXPECTED_ERROR',
+      message: `Unexpected error in addFieldSafely: ${unexpectedError.message}`,
+      error: unexpectedError.message,
+      stack: unexpectedError.stack
+    });
+    
+    console.error(`[addFieldSafely] UNEXPECTED ERROR`, {
+      name: String(name).substring(0, 50),
+      error: unexpectedError.message,
+      stack: unexpectedError.stack
+    });
+    
+    addFieldSafelyErrors.push(errorContext);
+    if (addFieldSafelyErrors.length > MAX_ERROR_LOG_SIZE) {
+      addFieldSafelyErrors.shift();
+    }
+    
+    return false;
+  }
+}
+
+// Function to get addFieldSafely error logs
+function getAddFieldErrors() {
+  return {
+    total: addFieldSafelyErrors.length,
+    errors: addFieldSafelyErrors,
+    summary: {
+      invalidNames: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'INVALID_NAME')).length,
+      emptyValues: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'EMPTY_VALUE')).length,
+      typeErrors: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'TYPE_CONVERSION_ERROR')).length,
+      truncated: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'TRUNCATED')).length,
+      embedFailed: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'EMBED_ADD_FAILED')).length,
+      unexpected: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'UNEXPECTED_ERROR')).length
+    }
+  };
+}
+
+// Function to send addFieldSafely errors to Discord log channel
+async function logAddFieldSafelyErrors(client) {
+  try {
+    const errorLog = getAddFieldErrors();
+    if (errorLog.total === 0) return;
+
+    const logChannel = await client.channels.fetch(ERROR_LOG_CHANNEL).catch(() => null);
+    if (!logChannel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor('#FF6B6B')
+      .setTitle('⚠️ addFieldSafely Error Report')
+      .setDescription(`Total Errors: **${errorLog.total}**`)
+      .addFields(
+        { name: 'Invalid Names', value: `${errorLog.summary.invalidNames}`, inline: true },
+        { name: 'Empty Values', value: `${errorLog.summary.emptyValues}`, inline: true },
+        { name: 'Type Errors', value: `${errorLog.summary.typeErrors}`, inline: true },
+        { name: 'Truncated Fields', value: `${errorLog.summary.truncated}`, inline: true },
+        { name: 'Embed Add Failed', value: `${errorLog.summary.embedFailed}`, inline: true },
+        { name: 'Unexpected Errors', value: `${errorLog.summary.unexpected}`, inline: true }
+      )
+      .setFooter({ text: `Last Error: ${new Date(errorLog.errors[errorLog.errors.length - 1]?.timestamp).toISOString()}` });
+
+    // Add recent error details
+    const recentErrors = errorLog.errors.slice(-5);
+    if (recentErrors.length > 0) {
+      const errorDetails = recentErrors.map((err, idx) => 
+        `**Error ${idx + 1}**: ${err.errors.map(e => e.type).join(', ')}\n` +
+        `Name: \`${err.name.substring(0, 50)}\`\n` +
+        `Time: <t:${Math.floor(err.timestamp / 1000)}:F>`
+      ).join('\n\n');
+      
+      embed.addFields({ name: 'Recent Errors (Last 5)', value: errorDetails.substring(0, 1024), inline: false });
+    }
+
+    await logChannel.send({ embeds: [embed] });
+  } catch (error) {
+    console.error('[logAddFieldSafelyErrors] Failed to log errors:', error.message);
+  }
+}
+
+// Helper function to create standard embed footer and thumbnail
+function getStandardEmbedFooter() {
+  return {
+    text: 'Version 1.0.9 | Made By Atlas'
+  };
+}
+
+function getStandardThumbnail() {
+  return 'https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hc=0e79de3b74f088fb71edf1e20ae0df9f&ct=1704729600';
+}
+
+// Helper function to check if user has admin role
+function hasAdminRole(member) {
+  const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+  return member.roles.cache.some(role => adminRoles.includes(role.id));
+}
+
+// Helper function to create category select menu
+function createCategorySelectMenu(customId, placeholder = 'Select item category') {
+  return new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder(placeholder)
+    .addOptions([
+      { label: 'Diamonds', value: 'diamonds', emoji: '💎' },
+      { label: 'Huges', value: 'huges', emoji: '🔥' },
+      { label: 'Exclusives', value: 'exclusives', emoji: '✨' },
+      { label: 'Eggs', value: 'eggs', emoji: '🥚' },
+      { label: 'Gifts', value: 'gifts', emoji: '🎁' }
+    ]);
+}
+
+// Helper function to create huge subcategory select menu
+function createHugeSubcategorySelectMenu(customId) {
+  return new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder('Select a Huge subcategory')
+    .addOptions(Object.keys(itemCategories.huges).map(sub => ({
+      label: sub,
+      value: sub
+    })));
+}
+
+// Helper function to create item select menu
+function createItemSelectMenu(customId, items, placeholder = 'Select items', maxValues = 25) {
+  return new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder(placeholder)
+    .setMaxValues(Math.min(items.length, maxValues))
+    .addOptions(items.map(item => ({ 
+      label: formatItemName(item), 
+      value: item,
+      emoji: getItemEmoji(item)
+    })));
+}
+
+// Helper function to create diamonds modal
+function createDiamondsModal(customId, title = 'Add Diamonds') {
+  const modal = new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle(title);
+
+  const diamondsInput = new TextInputBuilder()
+    .setCustomId(`${customId}_diamonds_input`)
+    .setLabel('Amount of Diamonds')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('e.g., 5000, 10K, 1M')
+    .setRequired(true);
+
+  const row = new ActionRowBuilder().addComponents(diamondsInput);
+  modal.addComponents(row);
+  
+  return modal;
+}
+
+// Helper function to create quantity selection modal
+function createQuantityModal(customId, itemCount) {
+  const modal = new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle('Select Quantities');
+
+  const quantitiesInput = new TextInputBuilder()
+    .setCustomId('quantities')
+    .setLabel(`Quantities for ${itemCount} items (comma separated)`)
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder('1,1,1... (one per item)')
+    .setRequired(true);
+
+  const row = new ActionRowBuilder().addComponents(quantitiesInput);
+  modal.addComponents(row);
+  
+  return modal;
+}
+
+// Helper function to create continue selection menu
+function createContinueSelectMenu(customId, confirmLabel = '✅ Confirm') {
+  return new StringSelectMenuBuilder()
+    .setCustomId(customId)
+    .setPlaceholder('What would you like to do?')
+    .addOptions([
+      { label: confirmLabel, value: 'confirm' },
+      { label: '➕ Add Another Category', value: 'add_category' },
+      { label: '❌ Remove Items', value: 'remove_items' }
+    ]);
 }
 
 // Save data every 5 minutes and reload without losing active embeds
@@ -652,8 +1342,24 @@ client.once('clientReady', async () => {
       ]
     },
     {
+      name: 'addfieldserrors',
+      description: 'View addFieldSafely error logs (admin only)'
+    },
+    {
       name: 'botcmds',
       description: 'View all available bot commands'
+    },
+    {
+      name: 'botlogs',
+      description: 'View bot logs with pagination (admin only)',
+      options: [
+        {
+          name: 'type',
+          type: ApplicationCommandOptionType.String,
+          description: 'Filter logs by type (PROOF_SUCCESS, PROOF_ERROR, PROOF_TIMEOUT, PROOF_REMINDER, etc.)',
+          required: false
+        }
+      ]
     },
   ];
 
@@ -670,12 +1376,14 @@ client.on('messageCreate', async (message) => {
 
     // Verify it's an image
     if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-      return message.reply('❌ Please upload an image file.');
+      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type });
+      return message.reply({ content: `⚠️ ${ERROR_CODES['E56']} | Error (E56)` });
     }
 
     const guild = message.guild;
     let proofChannel = null;
     let proofEmbed = null;
+    let originalMessageId = null;
 
     if (proofData.type === 'trade') {
       const tradeProofChannelId = '1461849745566990487';
@@ -683,15 +1391,19 @@ client.on('messageCreate', async (message) => {
 
       if (!proofChannel) {
         delete message.author.waitingForProof;
-        return message.reply('❌ Trade proof channel not found.');
+        botLogs.addLog('PROOF_ERROR', 'Trade proof channel not found', message.author.id);
+        return message.reply({ content: `⚠️ ${ERROR_CODES['E57']} | Error (E57)` });
       }
 
       // Get trade info
       const trade = trades.get(proofData.tradeMessageId);
       if (!trade) {
         delete message.author.waitingForProof;
-        return message.reply('❌ Trade no longer exists.');
+        botLogs.addLog('PROOF_ERROR', 'Trade not found', message.author.id, { tradeId: proofData.tradeMessageId });
+        return message.reply({ content: `⚠️ ${ERROR_CODES['E58']} | Error (E58)` });
       }
+
+      originalMessageId = proofData.tradeMessageId;
 
       // Create proof embed
       proofEmbed = new EmbedBuilder()
@@ -707,7 +1419,8 @@ client.on('messageCreate', async (message) => {
 
       if (!proofChannel) {
         delete message.author.waitingForProof;
-        return message.reply('❌ Auction proof channel not found.');
+        botLogs.addLog('PROOF_ERROR', 'Auction proof channel not found', message.author.id);
+        return message.reply({ content: `⚠️ ${ERROR_CODES['E59']} | Error (E59)` });
       }
 
       // Get auction info from finishedAuctions Map
@@ -715,8 +1428,11 @@ client.on('messageCreate', async (message) => {
       
       if (!auctionData) {
         delete message.author.waitingForProof;
-        return message.reply('❌ Auction no longer exists.');
+        botLogs.addLog('PROOF_ERROR', 'Auction not found', message.author.id, { auctionId: proofData.auctionProofMessageId });
+        return message.reply({ content: `⚠️ ${ERROR_CODES['E60']} | Error (E60)` });
       }
+
+      originalMessageId = proofData.auctionProofMessageId;
 
       // Create proof embed for auction
       proofEmbed = new EmbedBuilder()
@@ -732,7 +1448,8 @@ client.on('messageCreate', async (message) => {
 
       if (!proofChannel) {
         delete message.author.waitingForProof;
-        return message.reply('❌ Giveaway proof channel not found.');
+        botLogs.addLog('PROOF_ERROR', 'Giveaway proof channel not found', message.author.id);
+        return message.reply({ content: `⚠️ ${ERROR_CODES['E61']} | Error (E61)` });
       }
 
       // Get giveaway info from finishedGiveaways Map
@@ -740,8 +1457,11 @@ client.on('messageCreate', async (message) => {
       
       if (!giveawayData) {
         delete message.author.waitingForProof;
-        return message.reply('❌ Giveaway no longer exists.');
+        botLogs.addLog('PROOF_ERROR', 'Giveaway not found', message.author.id, { giveawayId: proofData.giveawayProofMessageId });
+        return message.reply({ content: `⚠️ ${ERROR_CODES['E62']} | Error (E62)` });
       }
+
+      originalMessageId = proofData.giveawayProofMessageId;
 
       // Create proof embed for giveaway
       proofEmbed = new EmbedBuilder()
@@ -753,11 +1473,41 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
     } else {
       delete message.author.waitingForProof;
-      return message.reply('❌ Invalid proof type.');
+      botLogs.addLog('PROOF_ERROR', 'Invalid proof type', message.author.id, { type: proofData.type });
+      return message.reply({ content: `⚠️ ${ERROR_CODES['E63']} | Error (E63)` });
     }
 
     // Send to proof channel
     await proofChannel.send({ embeds: [proofEmbed] });
+    
+    // Update the original embed with thumbnail
+    try {
+      const channel = guild.channels.cache.get(proofData.channelId || (proofData.type === 'trade' ? (trades.get(originalMessageId)?.channelId) : null));
+      if (channel && originalMessageId) {
+        const originalMessage = await channel.messages.fetch(originalMessageId).catch(() => null);
+        if (originalMessage && originalMessage.embeds.length > 0) {
+          const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
+            .setThumbnail(attachment.url);
+          
+          await originalMessage.edit({ embeds: [updatedEmbed] });
+          botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail`, message.author.id, { type: proofData.type });
+        }
+      }
+    } catch (e) {
+      console.error('Error updating original embed with thumbnail:', e);
+      botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
+    }
+
+    // Mark as proof uploaded and clear tracking for this message
+    const tracking = proofUploadTracking.get(originalMessageId);
+    if (tracking) {
+      tracking.proofUploaded = true;
+      if (tracking.timeout) clearTimeout(tracking.timeout);
+      if (tracking.reminderIntervals) {
+        tracking.reminderIntervals.forEach(id => clearInterval(id));
+      }
+    }
+    proofUploadTracking.delete(originalMessageId);
     
     message.reply('✅ Proof image has been submitted and recorded!');
     delete message.author.waitingForProof;
@@ -819,6 +1569,130 @@ function formatBid(num) {
   return num.toString();
 }
 
+// Function to start proof upload timeout
+function startProofUploadTimeout(messageId, guild, proofData) {
+  try {
+    // Clear existing timeout if any
+    if (proofUploadTracking.has(messageId)) {
+      const existing = proofUploadTracking.get(messageId);
+      if (existing.timeout) clearTimeout(existing.timeout);
+      if (existing.reminderIntervals) {
+        existing.reminderIntervals.forEach(id => clearInterval(id));
+      }
+    }
+
+    const trackingData = {
+      type: proofData.type,
+      hostId: proofData.hostId,
+      guestId: proofData.guestId,
+      reminderCount: 0,
+      reminderTimestamp: Date.now()
+    };
+
+    proofUploadTracking.set(messageId, trackingData);
+
+    // Set timeout for 3 minutes
+    const timeoutId = setTimeout(async () => {
+      try {
+        const tracking = proofUploadTracking.get(messageId);
+        if (!tracking || tracking.proofUploaded) return;
+
+        // Mark as trade not completed - change color to red and remove buttons
+        let trade, channel, message;
+        
+        if (proofData.type === 'trade') {
+          trade = trades.get(messageId);
+          if (trade) {
+            channel = guild.channels.cache.get(trade.channelId);
+            if (channel) {
+              message = await channel.messages.fetch(messageId).catch(() => null);
+              if (message && message.embeds.length > 0) {
+                const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+                  .setColor(0xff0000)
+                  .setDescription(`**Status:** ❌ Trade Not Completed (Proof Timeout)\n\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>`);
+                
+                await message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
+                botLogs.addLog('PROOF_TIMEOUT', 'Trade marked as not completed due to proof timeout', null, { tradeId: messageId });
+              }
+            }
+          }
+        } else if (proofData.type === 'auction') {
+          // For auction, mark as failed
+          const auctionData = finishedAuctions.get(messageId);
+          if (auctionData) {
+            channel = guild.channels.cache.get(auctionData.channelId);
+            if (channel) {
+              message = await channel.messages.fetch(messageId).catch(() => null);
+              if (message && message.embeds.length > 0) {
+                const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+                  .setColor(0xff0000)
+                  .setDescription(`**Status:** ❌ Auction Proof Not Submitted`);
+                
+                await message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
+                botLogs.addLog('PROOF_TIMEOUT', 'Auction marked as proof failed', null, { auctionId: messageId });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error in proof timeout:', e);
+      }
+      
+      proofUploadTracking.delete(messageId);
+    }, PROOF_UPLOAD_TIMEOUT);
+
+    trackingData.timeout = timeoutId;
+
+    // Set reminders (3 times, every minute)
+    const reminderIntervals = [];
+    let reminderCount = 0;
+
+    const reminderInterval = setInterval(async () => {
+      try {
+        reminderCount++;
+        if (reminderCount > PROOF_MAX_REMINDERS) {
+          clearInterval(reminderInterval);
+          return;
+        }
+
+        const tracking = proofUploadTracking.get(messageId);
+        if (!tracking || tracking.proofUploaded) {
+          clearInterval(reminderInterval);
+          return;
+        }
+
+        const channel = guild.channels.cache.get(proofData.channelId);
+        if (channel) {
+          const timeRemaining = Math.ceil((PROOF_UPLOAD_TIMEOUT - (Date.now() - trackingData.reminderTimestamp)) / 1000);
+          const timeMinutes = Math.ceil(timeRemaining / 60);
+          
+          let message = `⏰ **Proof Upload Reminder (${reminderCount}/${PROOF_MAX_REMINDERS})**\n\n`;
+          
+          if (proofData.type === 'trade') {
+            message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your trade.\n\n`;
+          } else {
+            message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your ${proofData.type}.\n\n`;
+          }
+          
+          message += `⏱️ Time remaining: ${timeMinutes} minute${timeMinutes !== 1 ? 's' : ''}\n`;
+          message += `📸 Upload the image in this channel to complete the proof.`;
+          
+          await channel.send(message).catch(() => null);
+          botLogs.addLog('PROOF_REMINDER', `Reminder ${reminderCount}/${PROOF_MAX_REMINDERS} sent`, null, { type: proofData.type, messageId });
+        }
+      } catch (e) {
+        console.error('Error in reminder interval:', e);
+      }
+    }, PROOF_REMINDER_INTERVAL);
+
+    reminderIntervals.push(reminderInterval);
+    trackingData.reminderIntervals = reminderIntervals;
+
+  } catch (e) {
+    console.error('Error starting proof upload timeout:', e);
+  }
+}
+
 function parseDuration(str) {
   str = str.toString().trim().toLowerCase();
   
@@ -864,7 +1738,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'setupauction') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -892,7 +1766,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'update') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -1028,7 +1902,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'bid') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
-      if (!auction) return interaction.reply({ content: 'No auction running in this channel.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E16');
 
       // Show modal
       const modal = new ModalBuilder()
@@ -1059,8 +1933,8 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'endauction') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
-      if (!auction) return interaction.reply({ content: 'No auction running.', flags: MessageFlags.Ephemeral });
-      if (auction.host.id !== interaction.user.id) return interaction.reply({ content: 'Only the host can end the auction.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E16');
+      if (auction.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E02');
 
       clearTimeout(auction.timer);
       await endAuction(interaction.channel);
@@ -1069,7 +1943,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'auctionstatus') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
-      if (!auction) return interaction.reply({ content: 'No auction running.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E16');
 
       const embed = new EmbedBuilder()
         .setTitle('Auction Status')
@@ -1083,13 +1957,13 @@ client.on('interactionCreate', async (interaction) => {
     const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
 
     if (commandName === 'deleteauction') {
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const messageId = interaction.options.getString('messageid');
       const auction = Array.from(auctions.values()).find(a => a.messageId === messageId);
-      if (!auction) return interaction.reply({ content: 'Auction not found.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E07', 'Auction not found');
 
       clearTimeout(auction.timer);
       clearInterval(auction.updateInterval);
@@ -1102,33 +1976,33 @@ client.on('interactionCreate', async (interaction) => {
         // ignore if message not found
       }
       auctions.delete(auction.channelId);
-      interaction.reply({ content: `Auction "${auction.title}" (from ${auction.host}) deleted by admin.`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: `Auction "${auction.title}" (from ${auction.host}) deleted by admin.`, flags: MessageFlags.Ephemeral });
     }
 
     if (commandName === 'endauctionadmin') {
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const messageId = interaction.options.getString('messageid');
       const auction = Array.from(auctions.values()).find(a => a.messageId === messageId);
-      if (!auction) return interaction.reply({ content: 'Auction not found.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E07', 'Auction not found');
 
       clearTimeout(auction.timer);
       clearInterval(auction.updateInterval);
       const channel = interaction.guild.channels.cache.get(auction.channelId);
       await endAuction(channel);
-      interaction.reply({ content: `Auction "${auction.title}" (from ${auction.host}) ended by admin.`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: `Auction "${auction.title}" (from ${auction.host}) ended by admin.`, flags: MessageFlags.Ephemeral });
     }
 
     if (commandName === 'restartauction') {
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const messageId = interaction.options.getString('messageid');
       const auction = Array.from(auctions.values()).find(a => a.messageId === messageId);
-      if (!auction) return interaction.reply({ content: 'Auction not found.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E07', 'Auction not found');
 
       clearTimeout(auction.timer);
       clearInterval(auction.updateInterval);
@@ -1166,34 +2040,34 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'redirectauctions') {
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const channel = interaction.options.getChannel('channel');
-      if (channel.type !== 0) return interaction.reply({ content: 'Please select a text channel.', flags: MessageFlags.Ephemeral });
+      if (channel.type !== 0) return sendErrorReply(interaction, 'E49', 'Please select a text channel');
       redirectChannelId = channel.id;
       interaction.reply({ content: `All future auctions will be redirected to ${channel}.`, flags: MessageFlags.Ephemeral });
     }
 
     if (commandName === 'redirecttrade') {
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const channel = interaction.options.getChannel('channel');
-      if (channel.type !== 0) return interaction.reply({ content: 'Please select a text channel.', flags: MessageFlags.Ephemeral });
+      if (channel.type !== 0) return sendErrorReply(interaction, 'E49', 'Please select a text channel');
       redirectTradeChannelId = channel.id;
       interaction.reply({ content: `All future trades will be redirected to ${channel}.`, flags: MessageFlags.Ephemeral });
     }
 
     if (commandName === 'redirectinventory') {
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const channel = interaction.options.getChannel('channel');
-      if (channel.type !== 0) return interaction.reply({ content: 'Please select a text channel.', flags: MessageFlags.Ephemeral });
+      if (channel.type !== 0) return sendErrorReply(interaction, 'E49', 'Please select a text channel');
       redirectInventoryChannelId = channel.id;
       interaction.reply({ content: `All inventories will be posted to ${channel}.`, flags: MessageFlags.Ephemeral });
     }
@@ -1202,7 +2076,7 @@ client.on('interactionCreate', async (interaction) => {
       // Check admin permission first
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -1212,10 +2086,7 @@ client.on('interactionCreate', async (interaction) => {
       const currentTradeCount = userTradeCount.get(interaction.user.id) || 0;
 
       if (currentTradeCount >= userTradeLimit) {
-        return interaction.reply({ 
-          content: `You have reached your trade creation limit (${userTradeLimit}). ${isAdmin ? 'As an admin, you can have up to 10 active trades.' : 'Regular users can have up to 2 active trades.'}`,
-          flags: MessageFlags.Ephemeral 
-        });
+        return sendErrorReply(interaction, 'E81', `You have reached your trade creation limit (${userTradeLimit}). ${isAdmin ? 'As an admin, you can have up to 10 active trades.' : 'Regular users can have up to 2 active trades.'}`);
       }
 
       const versionFile = require('./version.json');
@@ -1242,13 +2113,13 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'deletetrade') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const messageId = interaction.options.getString('messageid');
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       // Decrement trade count for host
       const hostId = trade.host.id;
@@ -1273,16 +2144,16 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'accepttrade') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
       const messageId = interaction.options.getString('messageid');
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       if (trade.offers.length > 0) {
-        return interaction.reply({ content: 'This trade has offers and cannot be cancelled this way.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E08');
       }
 
       // Mark trade as cancelled
@@ -1294,7 +2165,7 @@ client.on('interactionCreate', async (interaction) => {
       await updateTradeEmbed(interaction.guild, trade, messageId);
 
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`❌ This trade has been cancelled by an admin.`);
+      await channel.send(`⚠️ This trade has been cancelled by an admin.`);
 
       interaction.reply({ content: `Trade has been cancelled.`, flags: MessageFlags.Ephemeral });
     }
@@ -1302,7 +2173,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'setupinventory') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -1330,7 +2201,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'setupgiveaway') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -1359,7 +2230,7 @@ client.on('interactionCreate', async (interaction) => {
       // Check if user has admin role (same as other admin commands)
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -1368,7 +2239,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: '✅ All bot data has been successfully saved to Redis!', flags: MessageFlags.Ephemeral });
       } catch (error) {
         console.error('Error saving data:', error);
-        await interaction.reply({ content: '❌ An error occurred while saving data.', flags: MessageFlags.Ephemeral });
+        await sendErrorReply(interaction, 'E46');
       }
     }
 
@@ -1376,7 +2247,7 @@ client.on('interactionCreate', async (interaction) => {
       // Check if user has admin role
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-      if (!hasAdminRole) return interaction.reply({ content: 'You do not have permission to use this command.', flags: MessageFlags.Ephemeral });
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
 
       await logAdminCommand(interaction, commandName);
 
@@ -1395,7 +2266,7 @@ client.on('interactionCreate', async (interaction) => {
         const messagesToDelete = botMessages.first(amount);
         
         if (messagesToDelete.length === 0) {
-          return interaction.editReply({ content: '❌ No bot messages found in this channel.' });
+          return sendErrorReply(interaction, 'E64');
         }
         
         // Delete the messages
@@ -1415,7 +2286,68 @@ client.on('interactionCreate', async (interaction) => {
         
       } catch (error) {
         console.error('Error clearing bot messages:', error);
-        await interaction.editReply({ content: '❌ An error occurred while clearing bot messages.' });
+        await interaction.editReply({ content: `⚠️ ${ERROR_CODES['E65']} | Error (E65)` });
+      }
+    }
+
+    if (commandName === 'addfieldserrors') {
+      if (!hasAdminRole(interaction.member)) return sendErrorReply(interaction, 'E05');
+      
+      await logAdminCommand(interaction, commandName);
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      try {
+        const errorLog = getAddFieldErrors();
+        
+        if (errorLog.total === 0) {
+          await interaction.editReply({ content: '✅ No addFieldSafely errors logged.' });
+          return;
+        }
+
+        // Create embed with error summary
+        const embed = new EmbedBuilder()
+          .setColor('#FF6B6B')
+          .setTitle('⚠️ addFieldSafely Error Report')
+          .setDescription(`Total Errors Logged: **${errorLog.total}**`)
+          .addFields(
+            { name: 'Invalid Names', value: `${errorLog.summary.invalidNames}`, inline: true },
+            { name: 'Empty Values', value: `${errorLog.summary.emptyValues}`, inline: true },
+            { name: 'Type Errors', value: `${errorLog.summary.typeErrors}`, inline: true },
+            { name: 'Truncated Fields', value: `${errorLog.summary.truncated}`, inline: true },
+            { name: 'Embed Add Failed', value: `${errorLog.summary.embedFailed}`, inline: true },
+            { name: 'Unexpected Errors', value: `${errorLog.summary.unexpected}`, inline: true }
+          );
+
+        // Add recent errors (last 3)
+        const recentErrors = errorLog.errors.slice(-3);
+        if (recentErrors.length > 0) {
+          let errorDetails = '';
+          recentErrors.forEach((err, idx) => {
+            const errorTypes = err.errors.map(e => e.type).join(', ');
+            const timestamp = new Date(err.timestamp).toLocaleString();
+            errorDetails += `**[${idx + 1}] ${errorTypes}**\n`;
+            errorDetails += `Name: \`${err.name.substring(0, 40)}\`\n`;
+            errorDetails += `Time: ${timestamp}\n`;
+            
+            err.errors.forEach(errDetail => {
+              errorDetails += `  • ${errDetail.message}\n`;
+            });
+            errorDetails += '\n';
+          });
+          
+          embed.addFields({ 
+            name: 'Recent Errors (Last 3)', 
+            value: errorDetails.substring(0, 1024) || 'No recent errors',
+            inline: false 
+          });
+        }
+
+        embed.setFooter({ text: `Max logs: ${MAX_ERROR_LOG_SIZE} | Use /addfieldserrors to refresh` });
+
+        await interaction.editReply({ embeds: [embed] });
+      } catch (error) {
+        console.error('Error in addfieldserrors command:', error);
+        await sendErrorReply(interaction, 'E50');
       }
     }
 
@@ -1624,7 +2556,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'bid_button') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
-      if (!auction) return interaction.reply({ content: 'No auction running.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E16');
 
       const modal = new ModalBuilder()
         .setCustomId('bid_modal')
@@ -1654,9 +2586,9 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'view_bids_button') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
-      if (!auction) return interaction.reply({ content: 'No auction running.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E16');
 
-      if (auction.bids.length === 0) return interaction.reply({ content: 'No bids yet.', flags: MessageFlags.Ephemeral });
+      if (auction.bids.length === 0) return sendErrorReply(interaction, 'E23');
 
       // Sort bids by diamonds descending
       const sortedBids = auction.bids.sort((a, b) => b.diamonds - a.diamonds);
@@ -1683,17 +2615,17 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('giveaway_enter_')) {
       const messageId = interaction.message.id;
       const giveaway = giveaways.get(messageId);
-      if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
+      if (!giveaway) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
 
       // Check if user is the giveaway host
       if (giveaway.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ You can\'t enter your own raffle!', flags: MessageFlags.Ephemeral });
+        return await sendErrorReply(interaction, 'E44');
       }
 
       // Check if user already entered
       const alreadyEntered = giveaway.entries.some(entry => entry.user.id === interaction.user.id);
       if (alreadyEntered) {
-        return interaction.reply({ content: 'You are already entered in this giveaway!', flags: MessageFlags.Ephemeral });
+        return await sendErrorReply(interaction, 'E38');
       }
 
       // Check if user has special role for x2 entries
@@ -1720,7 +2652,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('giveaway_entries_')) {
       const messageId = interaction.customId.replace('giveaway_entries_', '');
       const giveaway = giveaways.get(messageId);
-      if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
+      if (!giveaway) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
 
       // Create entries list
       let entriesList = 'No entries yet.';
@@ -1756,15 +2688,85 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ embeds: [entriesEmbed], flags: MessageFlags.Ephemeral });
     }
 
+    if (interaction.customId.startsWith('giveaway_page_prev_') || interaction.customId.startsWith('giveaway_page_next_')) {
+      const messageId = interaction.message.id;
+      const giveaway = giveaways.get(messageId);
+      
+      if (!giveaway) {
+        await interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const currentPage = giveaway.currentPage || 1;
+      const itemsPerPage = giveaway.itemsPerPage || 10;
+      const totalPages = Math.ceil(giveaway.items.length / itemsPerPage);
+      let newPage = currentPage;
+
+      if (interaction.customId.startsWith('giveaway_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('giveaway_page_next_') && currentPage < totalPages) newPage++;
+
+      giveaway.currentPage = newPage;
+
+      // Get paginated items
+      const paginationData = paginateTradeItems(giveaway.items, newPage, itemsPerPage);
+
+      // Recreate giveaway embed
+      const embed = new EmbedBuilder()
+        .setTitle('🎁 Giveaway')
+        .setDescription(giveaway.description ? `**${giveaway.description}**\n\n**Click the button below to enter the giveaway!**` : '**Click the button below to enter the giveaway!**')
+        .setColor(0xFF1493)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+      const giveawayItemsField = totalPages > 1 
+        ? `${paginationData.text}\\n\\n*Page ${newPage}/${totalPages}*`
+        : paginationData.text;
+
+      addFieldSafely(embed, 'Giveaway Items', giveawayItemsField, false);
+      addFieldSafely(embed, 'Hosted by', giveaway.host.toString(), false);
+      
+      if (giveaway.description) {
+        addFieldSafely(embed, 'Description', giveaway.description, false);
+      }
+
+      addFieldSafely(embed, 'Time Remaining', 'Calculating...', false);
+
+      // Recreate buttons
+      const enterButton = new ButtonBuilder()
+        .setCustomId(`giveaway_enter_${messageId}`)
+        .setLabel('Enter Giveaway')
+        .setStyle(ButtonStyle.Success);
+
+      const entriesButton = new ButtonBuilder()
+        .setCustomId(`giveaway_entries_${messageId}`)
+        .setLabel(`${giveaway.entries.length || 0} Entries`)
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder().addComponents(enterButton, entriesButton);
+      const components = [row];
+
+      // Add pagination buttons
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`giveaway_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`giveaway_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
+    }
+
     if (interaction.customId.startsWith('giveaway_end_')) {
       const messageId = interaction.customId.replace('giveaway_end_', '');
       const giveaway = giveaways.get(messageId);
-      if (!giveaway) return interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
+      if (!giveaway) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
 
       if (giveaway.host.id !== interaction.user.id) {
         const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
         const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
-        if (!hasAdminRole) return interaction.reply({ content: 'Only the host or admin can end the giveaway.', flags: MessageFlags.Ephemeral });
+        if (!hasAdminRole) return sendErrorReply(interaction, 'E72');
       }
 
       // Clear update interval
@@ -1787,23 +2789,11 @@ client.on('interactionCreate', async (interaction) => {
 
             const giveawayItemsText = formatItemsText(giveaway.items);
 
-            endedEmbed.addFields({
-              name: 'Giveaway Items',
-              value: giveawayItemsText,
-              inline: false
-            });
+            addFieldSafely(endedEmbed, 'Giveaway Items', giveawayItemsText, false);
 
-            endedEmbed.addFields({
-              name: 'Hosted by',
-              value: giveaway.host.toString(),
-              inline: false
-            });
+            addFieldSafely(endedEmbed, 'Hosted by', giveaway.host.toString(), false);
 
-            endedEmbed.addFields({
-              name: 'Status',
-              value: 'Ended by host',
-              inline: false
-            });
+            addFieldSafely(endedEmbed, 'Status', 'Ended by host', false);
 
             // Disable all buttons
             const disabledRow = new ActionRowBuilder().addComponents(
@@ -1836,7 +2826,7 @@ client.on('interactionCreate', async (interaction) => {
         // Decrement giveaway count for host
         const hostId = giveaway.host.id;
         userGiveawayCount.set(hostId, Math.max(0, (userGiveawayCount.get(hostId) || 1) - 1));
-        return interaction.reply({ content: 'Giveaway ended with no entries.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E41');
       }
 
       // Select random winner
@@ -1850,21 +2840,13 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
 
       // Winner field
-      embed.addFields({ name: 'Winner', value: `**${winner.user}**`, inline: false });
+      addFieldSafely(embed, 'Winner', `**${winner.user}**`, false);
 
       // List items with proper formatting (bold + abbrev for diamonds)
       const itemsText = giveaway.items && giveaway.items.length > 0 ? formatItemsText(giveaway.items) : 'None';
-      embed.addFields({
-        name: 'Giveaway Items',
-        value: itemsText,
-        inline: false
-      });
+      addFieldSafely(embed, 'Giveaway Items', itemsText, false);
 
-      embed.addFields({
-        name: 'Total Entries',
-        value: giveaway.entries.length.toString(),
-        inline: true
-      });
+      addFieldSafely(embed, 'Total Entries', giveaway.entries.length.toString(), true);
 
       // Add Upload Proof Image button
       const proofButton = new ButtonBuilder()
@@ -1911,8 +2893,8 @@ client.on('interactionCreate', async (interaction) => {
       const start = (newPage - 1) * ITEMS_PER_PAGE;
       const end = start + ITEMS_PER_PAGE;
       const pageItems = interaction.user.tradeItems.slice(start, end);
-      const itemsList = formatItemsList(pageItems);
-      const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n\nWhat would you like to do?`;
+      const itemsList = formatItemsList(pageItems);                                         //\nWhat would you like to do?
+      const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
 
       const embed = new EmbedBuilder().setDescription(description);
 
@@ -2051,7 +3033,7 @@ client.on('interactionCreate', async (interaction) => {
       const isAdmin = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
       
       if (!hasGiveawayRole && !hasSpecialRole && !isAdmin) {
-        return interaction.reply({ content: 'You do not have permission to create a giveaway.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E01');
       }
 
       // Check giveaway limit
@@ -2060,10 +3042,7 @@ client.on('interactionCreate', async (interaction) => {
       const maxGiveaways = isAdmin ? Infinity : (hasSpecialRole ? 3 : 1);
       
       if (currentGiveaways >= maxGiveaways) {
-        return interaction.reply({ 
-          content: `You have reached the maximum number of simultaneous giveaways (${maxGiveaways}).`, 
-          flags: MessageFlags.Ephemeral 
-        });
+        return sendErrorReply(interaction, 'E83', `You have reached the maximum number of simultaneous giveaways (${maxGiveaways}).`);
       }
 
       // Initialize giveaway items for this user
@@ -2089,7 +3068,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId === 'trade_offer_button') {
       const trade = trades.get(interaction.message.id);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       // Show category selection for offer
       const { StringSelectMenuBuilder } = require('discord.js');
@@ -2117,8 +3096,8 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('trade_accept_')) {
       const messageId = interaction.customId.replace('trade_accept_', '');
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
-      if (trade.host.id !== interaction.user.id) return interaction.reply({ content: 'Only the host can accept offers.', flags: MessageFlags.Ephemeral });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+      if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
 
       // Accept the last offer
       const lastOffer = trade.offers[trade.offers.length - 1];
@@ -2136,8 +3115,8 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('trade_decline_')) {
       const messageId = interaction.customId.replace('trade_decline_', '');
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
-      if (trade.host.id !== interaction.user.id) return interaction.reply({ content: 'Only the host can decline offers.', flags: MessageFlags.Ephemeral });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+      if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
 
       // Decline the last offer
       const lastOffer = trade.offers[trade.offers.length - 1];
@@ -2164,8 +3143,8 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
-      if (trade.host.id !== interaction.user.id) return interaction.reply({ content: 'Only the host can delete this trade.', flags: MessageFlags.Ephemeral });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+      if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
 
       // Delete the trade message
       try {
@@ -2188,85 +3167,130 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('upload_proof_trade_')) {
       const messageId = interaction.customId.replace('upload_proof_trade_', '');
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       // Check if user is host or accepted user
       if (trade.host.id !== interaction.user.id && trade.acceptedUser.id !== interaction.user.id) {
-        return interaction.reply({ content: 'Only the host or guest can upload proof.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E02');
       }
 
-      // Show modal for image description
-      const modal = new ModalBuilder()
-        .setCustomId(`proof_image_modal_trade_${messageId}`)
-        .setTitle('Upload Proof Image');
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_file_trade_${messageId}`)
+        .setLabel('📎 Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Primary);
 
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('proof_description')
-        .setLabel('Description (optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Add any notes about this trade...')
-        .setRequired(false);
+      const row = new ActionRowBuilder().addComponents(uploadButton);
 
-      const row = new ActionRowBuilder().addComponents(descriptionInput);
-      modal.addComponents(row);
+      // Store state for file upload
+      interaction.user.waitingForProof = {
+        tradeMessageId: messageId,
+        type: 'trade',
+        channelId: trade.channelId,
+        hostId: trade.host.id,
+        guestId: trade.acceptedUser.id,
+        timestamp: Date.now()
+      };
 
-      await interaction.showModal(modal);
+      await interaction.reply({
+        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your trade.',
+        components: [row],
+        flags: 64
+      });
+
+      // Start timeout system
+      startProofUploadTimeout(messageId, interaction.guild, {
+        type: 'trade',
+        hostId: trade.host.id,
+        guestId: trade.acceptedUser.id,
+        channelId: trade.channelId
+      });
     }
 
     if (interaction.customId.startsWith('upload_proof_auction_')) {
-      // Show modal for image description
-      const modal = new ModalBuilder()
-        .setCustomId('proof_image_modal_auction')
-        .setTitle('Upload Proof Image');
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_file_auction`)
+        .setLabel('📎 Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Primary);
 
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('proof_description')
-        .setLabel('Description (optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Add any notes about this auction...')
-        .setRequired(false);
+      const row = new ActionRowBuilder().addComponents(uploadButton);
 
-      const row = new ActionRowBuilder().addComponents(descriptionInput);
-      modal.addComponents(row);
+      // Get auction data for tracking
+      const messageId = interaction.message?.id;
+      const auctionData = finishedAuctions.get(messageId);
+      const hostId = auctionData?.host?.id || null;
+      const winnerId = auctionData?.winner?.split('<@')[1]?.split('>')[0] || null;
 
-      await interaction.showModal(modal);
+      // Store state for file upload
+      interaction.user.waitingForProof = {
+        auctionProofMessageId: interaction.message?.id || null,
+        type: 'auction',
+        channelId: interaction.channelId,
+        hostId: hostId,
+        guestId: winnerId,
+        timestamp: Date.now()
+      };
+
+      await interaction.reply({
+        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your auction.',
+        components: [row],
+        flags: 64
+      });
+
+      // Start timeout system
+      if (messageId && hostId && winnerId) {
+        startProofUploadTimeout(messageId, interaction.guild, {
+          type: 'auction',
+          hostId: hostId,
+          guestId: winnerId,
+          channelId: interaction.channelId
+        });
+      }
     }
 
     if (interaction.customId.startsWith('upload_proof_giveaway_')) {
       // Get giveaway data
       const messageId = interaction.message.id;
       const giveawayData = finishedGiveaways.get(messageId);
-      if (!giveawayData) return interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
+      if (!giveawayData) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
 
       // Check if user is host or winner
       if (giveawayData.host.id !== interaction.user.id && giveawayData.winner.id !== interaction.user.id) {
-        return interaction.reply({ content: 'Only the host or winner can upload proof.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E02');
       }
 
-      // Show modal for image URL
-      const modal = new ModalBuilder()
-        .setCustomId(`proof_image_modal_giveaway_${messageId}`)
-        .setTitle('Upload Proof Image');
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_file_giveaway_${messageId}`)
+        .setLabel('📎 Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Primary);
 
-      const imageUrlInput = new TextInputBuilder()
-        .setCustomId('proof_image_url')
-        .setLabel('Image URL')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('https://imgur.com/...')
-        .setRequired(true);
+      const row = new ActionRowBuilder().addComponents(uploadButton);
 
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('proof_description')
-        .setLabel('Description (optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Add any notes about this giveaway...')
-        .setRequired(false);
+      // Store state for file upload
+      interaction.user.waitingForProof = {
+        giveawayProofMessageId: messageId,
+        type: 'giveaway',
+        channelId: giveawayData.channelId,
+        hostId: giveawayData.host.id,
+        guestId: giveawayData.winner.id,
+        timestamp: Date.now()
+      };
 
-      const row1 = new ActionRowBuilder().addComponents(imageUrlInput);
-      const row2 = new ActionRowBuilder().addComponents(descriptionInput);
-      modal.addComponents(row1, row2);
+      await interaction.reply({
+        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your giveaway.',
+        components: [row],
+        flags: 64
+      });
 
-      await interaction.showModal(modal);
+      // Start timeout system
+      startProofUploadTimeout(messageId, interaction.guild, {
+        type: 'giveaway',
+        hostId: giveawayData.host.id,
+        guestId: giveawayData.winner.id,
+        channelId: giveawayData.channelId
+      });
     }
 
     if (interaction.customId === 'inventory_update_button') {
@@ -2294,10 +3318,82 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Select an item category to add to your inventory:', components: [row], flags: MessageFlags.Ephemeral });
     }
 
+    if (interaction.customId.startsWith('inventory_page_prev_') || interaction.customId.startsWith('inventory_page_next_')) {
+      const messageId = interaction.message.id;
+      const inventoryUserId = interaction.message.mentions.users.first()?.id || interaction.user.id;
+      const inventory = inventories.get(inventoryUserId);
+      
+      if (!inventory || !inventory.items) {
+        await interaction.reply({ content: 'Inventory not found.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const currentPage = inventory.currentPage || 1;
+      const itemsPerPage = inventory.itemsPerPage || 10;
+      const totalPages = Math.ceil(inventory.items.length / itemsPerPage);
+      let newPage = currentPage;
+
+      if (interaction.customId.startsWith('inventory_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('inventory_page_next_') && currentPage < totalPages) newPage++;
+
+      inventory.currentPage = newPage;
+      inventories.set(inventoryUserId, inventory);
+
+      // Get paginated items
+      const paginationData = paginateTradeItems(inventory.items, newPage, itemsPerPage);
+
+      // Recreate inventory embed
+      const embed = new EmbedBuilder()
+        .setTitle('🎯 Inventory')
+        .setColor(0x00b0f4);
+
+      const avatarUrl = interaction.user.displayAvatarURL({ format: 'webp', size: 1024 });
+      embed.setAuthor({ name: interaction.user.displayName || interaction.user.username, iconURL: avatarUrl });
+
+      const inventoryItemsField = totalPages > 1 
+        ? `${paginationData.text}\\n\\n*Page ${newPage}/${totalPages}*`
+        : paginationData.text;
+
+      addFieldSafely(embed,
+        `Items${inventory.diamonds > 0 ? ` + ${formatBid(inventory.diamonds)} 💎` : 'None'}`,
+        inventoryItemsField,
+        false
+      );
+
+      if (inventory.lookingFor) {
+        addFieldSafely(embed, 'Looking For', inventory.lookingFor, true);
+      }
+
+      // Update pagination buttons
+      const updateButton = new ButtonBuilder()
+        .setCustomId('inventory_update_button')
+        .setLabel('Update Inventory')
+        .setStyle(ButtonStyle.Primary);
+
+      const deleteButton = new ButtonBuilder()
+        .setCustomId('inventory_delete_button')
+        .setLabel('Delete Items')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(updateButton, deleteButton);
+      const components = [row];
+
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`inventory_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`inventory_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
+    }
+
     if (interaction.customId === 'inventory_delete_button') {
       const inventory = inventories.get(interaction.user.id);
       if (!inventory || !inventory.items || inventory.items.length === 0) {
-        return interaction.reply({ content: 'You have no items to delete.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E29');
       }
 
       const { StringSelectMenuBuilder } = require('discord.js');
@@ -2306,7 +3402,7 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId('inventory_delete_select')
         .setPlaceholder('Select items to delete')
         .setMinValues(1)
-        .setMaxValues(Math.min(25, inventory.items.length));
+        .setMaxValues(Math.min(100, inventory.items.length));
 
       inventory.items.forEach((item, index) => {
         const emoji = getItemEmoji(item.name);
@@ -2323,7 +3419,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'inventory_delete_select') {
       const inventory = inventories.get(interaction.user.id);
       if (!inventory) {
-        return interaction.reply({ content: 'Inventory not found.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E26', 'Inventory not found');
       }
 
       const indicesToDelete = interaction.values.map(v => parseInt(v)).sort((a, b) => b - a);
@@ -2335,9 +3431,9 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       if (inventory.items.length === 0) {
-        interaction.reply({ content: 'All items deleted from your inventory!', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'All items deleted from your inventory!', flags: MessageFlags.Ephemeral });
       } else {
-        interaction.reply({ content: `${indicesToDelete.length} item(s) deleted from your inventory!`, flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `${indicesToDelete.length} item(s) deleted from your inventory!`, flags: MessageFlags.Ephemeral });
       }
     }
   }
@@ -2394,7 +3490,8 @@ client.on('interactionCreate', async (interaction) => {
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+      const displayText = items.length > 25 ? `Select items from **${category}** category (showing 25 of ${items.length}):` : `Select items from **${category}** category:`;
+      await interaction.reply({ content: displayText, components: [row], flags: 64 });
     }
 
     if (interaction.customId === 'trade_huge_subcategory_select') {
@@ -2402,11 +3499,13 @@ client.on('interactionCreate', async (interaction) => {
       const { StringSelectMenuBuilder } = require('discord.js');
       
       const items = itemCategories.huges[subcategory];
+      const maxOptions = Math.min(items.length, 25);
+      const itemsToShow = items.slice(0, maxOptions);
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`trade_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ 
+        .setMaxValues(maxOptions)
+        .addOptions(itemsToShow.map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
@@ -2423,9 +3522,14 @@ client.on('interactionCreate', async (interaction) => {
       
       const selectedItems = interaction.values;
 
-      // Store items selection for quantity input (limit to 25)
-      const limitedItems = selectedItems.slice(0, 25);
-      interaction.user.selectedTradeItems = limitedItems;
+      // Validate that selected items don't exceed 25 (Discord limit)
+      if (selectedItems.length > 25) {
+        await sendErrorReply(interaction, 'E06', `You selected ${selectedItems.length} items, but the maximum is 25 items per select menu. (Discord Limit)`);
+        return;
+      }
+
+      // Store items selection
+      interaction.user.selectedTradeItems = selectedItems;
       interaction.user.selectedTradeCategory = category;
       interaction.user.selectedTradeSubcategory = subcategory;
 
@@ -2436,9 +3540,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const quantitiesInput = new TextInputBuilder()
         .setCustomId('quantities')
-        .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
+        .setLabel(`Quantities for ${interaction.user.selectedTradeItems.length} items (comma separated)`)
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('1,2,3,... (one per item)')
+        .setPlaceholder('1,1,1... (one per item)')
         .setRequired(true);
 
       const row = new ActionRowBuilder().addComponents(quantitiesInput);
@@ -2484,14 +3588,21 @@ client.on('interactionCreate', async (interaction) => {
       }
       
       const items = itemCategories[category];
+      const maxOptions = Math.min(items.length, 25);
+      const itemsToShow = items.slice(0, maxOptions);
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_item_select_${messageId}_${category}`)
         .setPlaceholder(`Select items from ${category}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.slice(0, 25).map(item => ({ label: item, value: item })));
+        .setMaxValues(maxOptions)
+        .addOptions(itemsToShow.map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+      const displayText = items.length > 25 ? `Select items from **${category}** category (showing 25 of ${items.length}):` : `Select items from **${category}** category:`;
+      await interaction.reply({ content: displayText, components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('offer_huge_subcategory_select_')) {
@@ -2500,14 +3611,22 @@ client.on('interactionCreate', async (interaction) => {
       const { StringSelectMenuBuilder } = require('discord.js');
       
       const items = itemCategories.huges[subcategory];
+      const maxOptions = Math.min(items.length, 25);
+      const itemsToShow = items.slice(0, maxOptions);
+      
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_item_select_${messageId}_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ label: item, value: item })));
+        .setMaxValues(maxOptions)
+        .addOptions(itemsToShow.map(item => ({ 
+          label: formatItemName(item), 
+          value: item,
+          emoji: getItemEmoji(item)
+        })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
+      const displayText = items.length > 25 ? `Select items from **${subcategory}** (showing ${maxOptions} of ${items.length}):` : `Select items from **${subcategory}**:`;
+      await interaction.reply({ content: displayText, components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('offer_item_select_')) {
@@ -2517,10 +3636,14 @@ client.on('interactionCreate', async (interaction) => {
       let subcategory = parts.length > 2 ? parts.slice(2).join('_') : null;
       const selectedItems = interaction.values;
 
-      // Store items selection for quantity input
-      // Store items selection for quantity input (limit to 25)
-      const limitedItems = selectedItems.slice(0, 25);
-      interaction.user.selectedOfferItems = limitedItems;
+      // Validate that selected items don't exceed 25 (Discord limit)
+      if (selectedItems.length > 25) {
+        await sendErrorReply(interaction, 'E06', `You selected ${selectedItems.length} items, but the maximum is 25 items per select menu. (Discord Limit)`);
+        return;
+      }
+
+      // Store items selection
+      interaction.user.selectedOfferItems = selectedItems;
       interaction.user.selectedOfferCategory = category;
       interaction.user.selectedOfferSubcategory = subcategory;
       interaction.user.selectedOfferMessageId = messageId;
@@ -2532,9 +3655,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const quantitiesInput = new TextInputBuilder()
         .setCustomId('offer_quantities')
-        .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
+        .setLabel(`Quantities for ${selectedItems.length} items (comma separated)`)
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('1,2,3,... (one per item)')
+        .setPlaceholder('1,1,1... (one per item)')
         .setRequired(true);
 
       const row = new ActionRowBuilder().addComponents(quantitiesInput);
@@ -2570,7 +3693,7 @@ client.on('interactionCreate', async (interaction) => {
         const itemSelect = new StringSelectMenuBuilder()
           .setCustomId('trade_remove_item_select')
           .setPlaceholder('Select items to remove')
-          .setMaxValues(Math.min(itemsList.length, 25))
+          .setMaxValues(Math.min(25, itemsList.length))
           .addOptions(itemsList.map((item, idx) => ({ 
             label: `${item.name} (x${item.quantity})`, 
             value: idx.toString()
@@ -2648,11 +3771,11 @@ client.on('interactionCreate', async (interaction) => {
         // If offer contains only diamonds, submit directly without modal
         if (onlyDiamonds) {
           const trade = trades.get(messageId);
-          if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
+          if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
           // Check if user is the trade host
           if (trade.host.id === interaction.user.id) {
-            return interaction.reply({ content: '❌ You cannot make an offer on your own trade!', flags: 64 });
+            return await sendErrorReply(interaction, 'E04');
           }
 
           // Add offer to trade
@@ -2708,7 +3831,7 @@ client.on('interactionCreate', async (interaction) => {
         // Show items to remove
         const items = interaction.user.offerTradeItems || [];
         if (items.length === 0) {
-          return await interaction.reply({ content: 'No items to remove.', flags: 64 });
+          return sendErrorReply(interaction, 'E84', 'No items to remove');
         }
 
         const { StringSelectMenuBuilder } = require('discord.js');
@@ -2717,13 +3840,14 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId(`offer_remove_item_select_${messageId}`)
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
-          .setMaxValues(Math.min(25, items.length));
+          .setMaxValues(Math.min(100, items.length));
 
         items.forEach((item, index) => {
           const emoji = getItemEmoji(item.name);
           removeSelect.addOptions({
             label: `${formatItemName(item.name)} (x${item.quantity})`,
-            value: `${index}`
+            value: `${index}`,
+            emoji: emoji
           });
         });
 
@@ -2851,7 +3975,7 @@ client.on('interactionCreate', async (interaction) => {
         // Show items to remove
         const items = interaction.user.inventoryItems || [];
         if (items.length === 0) {
-          return await interaction.reply({ content: 'No items to remove.', flags: 64 });
+          return sendErrorReply(interaction, 'E84', 'No items to remove');
         }
 
         const { StringSelectMenuBuilder } = require('discord.js');
@@ -2860,13 +3984,14 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('inventory_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
-          .setMaxValues(Math.min(25, items.length));
+          .setMaxValues(1);
 
         items.forEach((item, index) => {
           const emoji = getItemEmoji(item.name);
           removeSelect.addOptions({
             label: `${formatItemName(item.name)} (x${item.quantity})`,
-            value: `${index}`
+            value: `${index}`,
+            emoji: emoji
           });
         });
 
@@ -2904,11 +4029,29 @@ client.on('interactionCreate', async (interaction) => {
 
         const row = new ActionRowBuilder().addComponents(continueSelect);
         
-        const itemsList = formatItemsList(items);
+        const currentPage = interaction.user.currentInventoryPage || 1;
+        const totalPages = Math.ceil(items.length / 15);
+        const start = (currentPage - 1) * 15;
+        const end = start + 15;
+        const pageItems = items.slice(start, end);
+        const itemsList = formatItemsList(pageItems);
+
+        const embed = new EmbedBuilder()                                                        //\nWhat would you like to do
+          .setDescription(`**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n`)
+          .setColor(0x00a8ff);
+
+        const components = [row];
+        if (totalPages > 1) {
+          const paginationRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('inventory_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+            new ButtonBuilder().setCustomId('inventory_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+          );
+          components.push(paginationRow);
+        }
 
         await interaction.reply({ 
-          content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-          components: [row], 
+          embeds: [embed],
+          components, 
           flags: 64 
         });
       }
@@ -2969,7 +4112,7 @@ client.on('interactionCreate', async (interaction) => {
         // Show items to remove
         const items = interaction.user.giveawayItems || [];
         if (items.length === 0) {
-          return await interaction.reply({ content: 'No items to remove.', flags: 64 });
+          return sendErrorReply(interaction, 'E84', 'No items to remove');
         }
 
         const { StringSelectMenuBuilder } = require('discord.js');
@@ -2978,13 +4121,14 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('giveaway_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
-          .setMaxValues(Math.min(25, items.length));
+          .setMaxValues(Math.min(100, items.length));
 
         items.forEach((item, index) => {
           const emoji = getItemEmoji(item.name);
           removeSelect.addOptions({
             label: `${formatItemName(item.name)} (x${item.quantity})`,
-            value: `${index}`
+            value: `${index}`,
+            emoji: emoji
           });
         });
 
@@ -3022,11 +4166,29 @@ client.on('interactionCreate', async (interaction) => {
 
         const row = new ActionRowBuilder().addComponents(continueSelect);
         
-        const itemsList = formatItemsList(items);
+        const currentPage = interaction.user.currentGiveawayPage || 1;
+        const totalPages = Math.ceil(items.length / 15);
+        const start = (currentPage - 1) * 15;
+        const end = start + 15;
+        const pageItems = items.slice(start, end);
+        const itemsList = formatItemsList(pageItems);
+
+        const embed = new EmbedBuilder()                                                        //\nWhat would you like to do
+          .setDescription(`**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n`)
+          .setColor(0xFF1493);
+
+        const components = [row];
+        if (totalPages > 1) {
+          const paginationRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('giveaway_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+            new ButtonBuilder().setCustomId('giveaway_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+          );
+          components.push(paginationRow);
+        }
 
         await interaction.reply({ 
-          content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-          components: [row], 
+          embeds: [embed],
+          components, 
           flags: 64 
         });
       }
@@ -3070,8 +4232,8 @@ client.on('interactionCreate', async (interaction) => {
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`inventory_item_select_${category}`)
         .setPlaceholder(`Select items from ${category}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.slice(0, 25).map(item => ({ 
+        .setMaxValues(Math.min(items.length, 100))
+        .addOptions(items.map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
@@ -3089,7 +4251,7 @@ client.on('interactionCreate', async (interaction) => {
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`inventory_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
-        .setMaxValues(Math.min(items.length, 25))
+        .setMaxValues(Math.min(items.length, 100))
         .addOptions(items.map(item => ({ 
           label: formatItemName(item), 
           value: item,
@@ -3107,9 +4269,8 @@ client.on('interactionCreate', async (interaction) => {
       
       const selectedItems = interaction.values;
 
-      // Store items selection for quantity input (limit to 25)
-      const limitedItems = selectedItems.slice(0, 25);
-      interaction.user.selectedInventoryItems = limitedItems;
+      // Store items selection - no longer limited to 25
+      interaction.user.selectedInventoryItems = selectedItems;
       interaction.user.selectedInventoryCategory = category;
       interaction.user.selectedInventorySubcategory = subcategory;
 
@@ -3119,9 +4280,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const quantitiesInput = new TextInputBuilder()
         .setCustomId('inv_quantities')
-        .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
+        .setLabel(`Quantities for ${selectedItems.length} items (comma separated)`)
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('1,2,3,... (one per item)')
+        .setPlaceholder('1,1,1... (one per item)')
         .setRequired(true);
 
       const row = new ActionRowBuilder().addComponents(quantitiesInput);
@@ -3171,8 +4332,8 @@ client.on('interactionCreate', async (interaction) => {
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`giveaway_item_select_${category}`)
         .setPlaceholder(`Select items from ${category}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.slice(0, 25).map(item => ({ 
+        .setMaxValues(Math.min(items.length, 100))
+        .addOptions(items.map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
@@ -3190,7 +4351,7 @@ client.on('interactionCreate', async (interaction) => {
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`giveaway_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
-        .setMaxValues(Math.min(items.length, 25))
+        .setMaxValues(Math.min(items.length, 100))
         .addOptions(items.map(item => ({ 
           label: formatItemName(item), 
           value: item,
@@ -3208,9 +4369,8 @@ client.on('interactionCreate', async (interaction) => {
       
       const selectedItems = interaction.values;
 
-      // Store items selection for quantity input (limit to 25)
-      const limitedItems = selectedItems.slice(0, 25);
-      interaction.user.selectedGiveawayItems = limitedItems;
+      // Store items selection - no longer limited to 25
+      interaction.user.selectedGiveawayItems = selectedItems;
       interaction.user.selectedGiveawayCategory = category;
       interaction.user.selectedGiveawaySubcategory = subcategory;
 
@@ -3220,9 +4380,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const quantitiesInput = new TextInputBuilder()
         .setCustomId('gwa_quantities')
-        .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
+        .setLabel(`Quantities for ${selectedItems.length} items (comma separated)`)
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('1,2,3,... (one per item)')
+        .setPlaceholder('1,1,1... (one per item)')
         .setRequired(true);
 
       const row = new ActionRowBuilder().addComponents(quantitiesInput);
@@ -3262,11 +4422,29 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      const itemsList = formatItemsList(interaction.user.tradeItems);
+      const currentPage = interaction.user.currentTradePage || 1;
+      const totalPages = Math.ceil((interaction.user.tradeItems || []).length / 15);
+      const start = (currentPage - 1) * 15;
+      const end = start + 15;
+      const pageItems = (interaction.user.tradeItems || []).slice(start, end);
+      const itemsList = formatItemsList(pageItems);
+
+      const embed = new EmbedBuilder()
+        .setDescription(`**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n\nWhat would you like to do?`)
+        .setColor(0x0099ff);
+
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+          new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
+        embeds: [embed],
+        components, 
         flags: 64 
       });
       return;
@@ -3294,13 +4472,29 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      const itemsList = interaction.user.tradeItems && interaction.user.tradeItems.length > 0 
-        ? formatItemsList(interaction.user.tradeItems)
-        : 'No items selected';
+      const currentPage = interaction.user.currentTradePage || 1;
+      const totalPages = Math.ceil((interaction.user.tradeItems || []).length / 15);
+      const start = (currentPage - 1) * 15;
+      const end = start + 15;
+      const pageItems = (interaction.user.tradeItems || []).slice(start, end);
+      const itemsList = pageItems.length > 0 ? formatItemsList(pageItems) : 'No items selected';
+
+      const embed = new EmbedBuilder()
+        .setDescription(`**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n\nWhat would you like to do?`)
+        .setColor(0x0099ff);
+
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+          new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
+        embeds: [embed],
+        components, 
         flags: 64 
       });
     }
@@ -3393,7 +4587,7 @@ client.on('interactionCreate', async (interaction) => {
       const quantitiesStr = interaction.fields.getTextInputValue('quantities');
       const quantities = quantitiesStr.split(',').map(q => parseInt(q.trim()) || 1);
       if (quantities.length !== selectedItems.length) {
-        return interaction.reply({ content: `Please provide exactly ${selectedItems.length} quantities separated by commas.`, flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E80', `Please provide exactly ${selectedItems.length} quantities separated by commas`);
       }
       const itemsWithQty = selectedItems.map((item, index) => {
         const qty = Math.max(1, quantities[index]);
@@ -3458,7 +4652,7 @@ client.on('interactionCreate', async (interaction) => {
       const quantitiesStr = interaction.fields.getTextInputValue('offer_quantities');
       const quantities = quantitiesStr.split(',').map(q => parseInt(q.trim()) || 1);
       if (quantities.length !== selectedItems.length) {
-        return interaction.reply({ content: `Please provide exactly ${selectedItems.length} quantities separated by commas.`, flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E80', `Please provide exactly ${selectedItems.length} quantities separated by commas`);
       }
       const itemsWithQty = selectedItems.map((item, index) => {
         const qty = Math.max(1, quantities[index]);
@@ -3470,6 +4664,9 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.offerTradeItems = [];
       }
       interaction.user.offerTradeItems = interaction.user.offerTradeItems.concat(itemsWithQty);
+      
+      // Track item count for validation
+      trackItemCount(interaction.user.id, 'offerTradeCount', interaction.user.offerTradeItems.length);
 
       // Show option to add more categories or proceed
       const { StringSelectMenuBuilder } = require('discord.js');
@@ -3506,7 +4703,7 @@ client.on('interactionCreate', async (interaction) => {
       const quantitiesStr = interaction.fields.getTextInputValue('inv_quantities');
       const quantities = quantitiesStr.split(',').map(q => parseInt(q.trim()) || 1);
       if (quantities.length !== selectedItems.length) {
-        return interaction.reply({ content: `Please provide exactly ${selectedItems.length} quantities separated by commas.`, flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E80', `Please provide exactly ${selectedItems.length} quantities separated by commas`);
       }
       const itemsWithQty = selectedItems.map((item, index) => {
         const qty = Math.max(1, quantities[index]);
@@ -3517,6 +4714,9 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.inventoryItems = [];
       }
       interaction.user.inventoryItems = interaction.user.inventoryItems.concat(itemsWithQty);
+      
+      // Track item count for validation
+      trackItemCount(interaction.user.id, 'inventoryCount', interaction.user.inventoryItems.length);
 
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -3550,7 +4750,7 @@ client.on('interactionCreate', async (interaction) => {
       const quantitiesStr = interaction.fields.getTextInputValue('gwa_quantities');
       const quantities = quantitiesStr.split(',').map(q => parseInt(q.trim()) || 1);
       if (quantities.length !== selectedItems.length) {
-        return interaction.reply({ content: `Please provide exactly ${selectedItems.length} quantities separated by commas.`, flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E80', `Please provide exactly ${selectedItems.length} quantities separated by commas`);
       }
       const itemsWithQty = selectedItems.map((item, index) => {
         const qty = Math.max(1, quantities[index]);
@@ -3561,6 +4761,9 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.giveawayItems = [];
       }
       interaction.user.giveawayItems = interaction.user.giveawayItems.concat(itemsWithQty);
+      
+      // Track item count for validation
+      trackItemCount(interaction.user.id, 'giveawayCount', interaction.user.giveawayItems.length);
 
       const { StringSelectMenuBuilder } = require('discord.js');
       
@@ -3586,6 +4789,11 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'inventory_setup_modal') {
+  // Defer the reply to avoid timeout on long operations
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
+
   const diamondsStr = interaction.fields.fields.has('inv_diamonds') ? interaction.fields.getTextInputValue('inv_diamonds') : '0';
   const lookingFor = interaction.fields.getTextInputValue('inv_looking_for') || 'Not specified';
   const robloxInput = interaction.fields.getTextInputValue('inv_roblox_username') || '';
@@ -3608,6 +4816,22 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   const inventoryItems = interaction.user.inventoryItems || [];
+  
+  // Validate that items were not lost
+  const itemCountBeforeDeletion = inventoryItems.length;
+  validateItemsNotLost(interaction, 'Inventory Setup', itemCountBeforeDeletion, inventoryItems);
+
+  delete interaction.user.inventoryItems;
+  delete interaction.user.selectedInventoryItems;
+  delete interaction.user.selectedInventoryCategory;
+  delete interaction.user.selectedInventorySubcategory;
+  
+  // Validate item count before finalizing
+  const isValid = await validateItemCount(interaction, 'inventoryCount', inventoryItems.length, inventoryItems);
+  if (!isValid) {
+    return sendErrorReply(interaction, 'E50', 'Item count validation failed. Please try again.');
+  }
+  
   delete interaction.user.inventoryItems;
   // ... (rest of your deletes)
 
@@ -3659,20 +4883,25 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // Rest of embed filling...
-  const itemsText = formatItemsText(inventoryItems);
-  embed.addFields({ 
-    name: `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : 'None'}`,
-    value: itemsText,
-    inline: true
-  });
+  // Paginate inventory items
+  const inventoryPaginationData = paginateTradeItems(inventoryItems, 1, 10);
+  const inventoryItemsField = inventoryPaginationData.totalPages > 1 
+    ? `${inventoryPaginationData.text}\n\n*Page ${inventoryPaginationData.page}/${inventoryPaginationData.totalPages}*`
+    : inventoryPaginationData.text;
 
-  embed.addFields({ name: 'Looking For', value: lookingFor, inline: true });
+  addFieldSafely(embed,
+    `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : 'None'}`,
+    inventoryItemsField,
+    false
+  );
+
+  addFieldSafely(embed, 'Looking For', lookingFor, true);
 
   const now = new Date();
   // Adjust to GMT-5 (UTC-5)
   const gmt5Time = new Date(now.getTime() - (5 * 60 * 60 * 1000));
   const timeStr = `${gmt5Time.getDate()}/${gmt5Time.getMonth() + 1}/${gmt5Time.getFullYear()} at ${gmt5Time.getHours().toString().padStart(2, '0')}:${gmt5Time.getMinutes().toString().padStart(2, '0')}`;
-  embed.addFields({ name: 'Last Edited', value: timeStr, inline: false });
+  addFieldSafely(embed, 'Last Edited', timeStr, false);
 
   // Buttons and sending...
   const updateButton = new ButtonBuilder()
@@ -3686,8 +4915,31 @@ client.on('interactionCreate', async (interaction) => {
     .setStyle(ButtonStyle.Danger);
 
   const row = new ActionRowBuilder().addComponents(updateButton, deleteButton);
+  const components = [row];
+
+  // Add pagination buttons if there are multiple pages
+  if (inventoryPaginationData.hasMultiplePages) {
+    const paginationRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`inventory_page_prev_${Date.now()}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId(`inventory_page_next_${Date.now()}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(inventoryPaginationData.page === inventoryPaginationData.totalPages)
+    );
+    components.push(paginationRow);
+  }
   const targetChannel = redirectInventoryChannelId ? interaction.guild.channels.cache.get(redirectInventoryChannelId) : interaction.channel;
-  const message = await targetChannel.send({ embeds: [embed], components: [row] });
+  
+  let message;
+  if (interaction.deferred) {
+    // If we deferred earlier, use editReply for the deferred response
+    const ephemeralMessage = await interaction.editReply({ embeds: [embed], components: [row] });
+    // Send a public copy to the target channel if different from current channel
+    if (targetChannel.id !== interaction.channel.id) {
+      message = await targetChannel.send({ embeds: [embed], components: [row] });
+    } else {
+      message = ephemeralMessage;
+    }
+  } else {
+    message = await targetChannel.send({ embeds: [embed], components: [row] });
+  }
 
   // Salvar dados
   const inventoryData = {
@@ -3769,19 +5021,31 @@ async function getRobloxAvatarUrl(userId) {
 }
   
     if (interaction.customId === 'giveaway_setup_modal') {
+      // Defer the reply to avoid timeout on long operations
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      }
+
       const giveawayItems = interaction.user.giveawayItems || [];
       const description = interaction.fields.getTextInputValue('gwa_description') || '';
       const durationStr = interaction.fields.getTextInputValue('gwa_duration');
+      
+      // Validate that items were not lost
+      const itemCountBeforeDeletion = giveawayItems.length;
+      validateItemsNotLost(interaction, 'Giveaway Setup', itemCountBeforeDeletion, giveawayItems);
+      
+      // Validate item count before finalizing
+      const isValid = await validateItemCount(interaction, 'giveawayCount', giveawayItems.length, giveawayItems);
+      if (!isValid) {
+        return sendErrorReply(interaction, 'E50', 'Item count validation failed. Please try again.');
+      }
       
       // Validate duration
       let duration = parseDuration(durationStr);
       const MAX_DURATION_MINUTES = 1440; // 24 hours = 1440 minutes = 86400 seconds
       
       if (isNaN(duration) || duration < 1 || duration > MAX_DURATION_MINUTES) {
-        return interaction.reply({ 
-          content: `Invalid duration. Please enter a time between 1 second and 24 hours (1440 minutes or 86400 seconds). Examples: 60s, 30m, 1h, 1440, etc.`, 
-          flags: MessageFlags.Ephemeral 
-        });
+        return sendErrorReply(interaction, 'E85', `Invalid duration. Please enter a time between 1 second and 24 hours (1440 minutes or 86400 seconds). Examples: 60s, 30m, 1h, 1440, etc.`);
       }
       
       delete interaction.user.giveawayItems;
@@ -3797,36 +5061,26 @@ async function getRobloxAvatarUrl(userId) {
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      // Format giveaway items
-      const giveawayItemsText = formatItemsText(giveawayItems);
+      // Format giveaway items with pagination
+      const giveawayPaginationData = paginateTradeItems(giveawayItems, 1, 10);
+      const giveawayItemsField = giveawayPaginationData.totalPages > 1 
+        ? `${giveawayPaginationData.text}\n\n*Page ${giveawayPaginationData.page}/${giveawayPaginationData.totalPages}*`
+        : giveawayPaginationData.text;
 
-      embed.addFields({
-        name: 'Giveaway Items',
-        value: giveawayItemsText,
-        inline: false
-      });
+      addFieldSafely(embed, 'Giveaway Items', giveawayItemsField, false);
 
-      embed.addFields({
-        name: 'Hosted by',
-        value: interaction.user.toString(),
-        inline: false
-      });
+      addFieldSafely(embed, 'Hosted by', interaction.user.toString(), false);
 
       // Add creator description if provided
       if (description) {
-        embed.addFields({
-          name: 'Description',
-          value: description,
-          inline: false
-        });
+        addFieldSafely(embed, 'Description',
+          description,
+        false
+        );
       }
 
       // Add duration field
-      embed.addFields({
-        name: 'Time Remaining',
-        value: 'Calculating...',
-        inline: false
-      });
+      addFieldSafely(embed, 'Time Remaining', 'Calculating...', false);
 
       // Calculate duration text for the reply message
       const durationHours = Math.floor(duration / 60);
@@ -3926,20 +5180,12 @@ async function getRobloxAvatarUrl(userId) {
                 .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
               
               // Winner field
-              endEmbed.addFields({ name: 'Winner', value: `**${winner.user}**`, inline: false });
+              addFieldSafely(endEmbed, 'Winner', `**${winner.user}**`, false);
               
               const itemsText = currentGiveaway.items && currentGiveaway.items.length > 0 ? formatItemsText(currentGiveaway.items) : 'None';
-              endEmbed.addFields({
-                name: 'Giveaway Items',
-                value: itemsText,
-                inline: false
-              });
+              addFieldSafely(endEmbed, 'Giveaway Items', itemsText, false);
               
-              endEmbed.addFields({
-                name: 'Total Entries',
-                value: currentGiveaway.entries.length.toString(),
-                inline: true
-              });
+              addFieldSafely(endEmbed, 'Total Entries', currentGiveaway.entries.length.toString(), true);
               
               const channel = interaction.guild.channels.cache.get(currentGiveaway.channelId);
               if (channel) {
@@ -3960,23 +5206,11 @@ async function getRobloxAvatarUrl(userId) {
           
           const giveawayItemsText = formatItemsText(currentGiveaway.items);
           
-          updatedEmbed.addFields({
-            name: 'Giveaway Items',
-            value: giveawayItemsText,
-            inline: false
-          });
+          addFieldSafely(updatedEmbed, 'Giveaway Items', giveawayItemsText, false);
           
-          updatedEmbed.addFields({
-            name: 'Hosted by',
-            value: currentGiveaway.host.toString(),
-            inline: false
-          });
+          addFieldSafely(updatedEmbed, 'Hosted by', currentGiveaway.host.toString(), false);
           
-          updatedEmbed.addFields({
-            name: 'Time Remaining',
-            value: formatTimeRemaining(currentGiveaway.expiresAt),
-            inline: false
-          });
+          addFieldSafely(updatedEmbed, 'Time Remaining', formatTimeRemaining(currentGiveaway.expiresAt), false);
           
           // Update components with new entries count
           const entriesCount = currentGiveaway.entries.length;
@@ -4006,12 +5240,23 @@ async function getRobloxAvatarUrl(userId) {
       
       giveawayData.updateInterval = updateInterval;
 
-      await interaction.reply({ content: replyMessage, flags: 64 });
+      if (interaction.deferred) {
+        await interaction.editReply({ content: replyMessage });
+      } else {
+        await interaction.reply({ content: replyMessage, flags: 64 });
+      }
       return;
     }
 
     if (interaction.customId === 'trade_setup_modal') {
-      const diamondsStr = interaction.fields.getTextInputValue('trade_diamonds') || '0';
+      let diamondsStr = '0';
+      try {
+        diamondsStr = interaction.fields.getTextInputValue('trade_diamonds') || '0';
+      } catch (e) {
+        // Field not found - diamonds already added as items
+        diamondsStr = '0';
+      }
+      
       const targetUsername = interaction.fields.getTextInputValue('trade_target_user') || '';
 
       let diamonds = 0;
@@ -4020,10 +5265,18 @@ async function getRobloxAvatarUrl(userId) {
       }
 
       const hostItems = interaction.user.tradeItems || [];
+      
+      // Validate that items were not lost (track item count before deletion)
+      const itemCountBeforeDeletion = hostItems.length;
+      validateItemsNotLost(interaction, 'Trade Offer Setup', itemCountBeforeDeletion, hostItems);
+      
       delete interaction.user.tradeItems;
       delete interaction.user.selectedTradeItems;
       delete interaction.user.selectedTradeCategory;
       delete interaction.user.selectedTradeSubcategory;
+
+      // Paginate items if more than 10
+      const paginationData = paginateTradeItems(hostItems, 1, 10);
 
       // Create trade embed
       const embed = new EmbedBuilder()
@@ -4033,14 +5286,16 @@ async function getRobloxAvatarUrl(userId) {
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      // Format host items with quantities
-      const hostItemsText = formatItemsText(hostItems);
+      // Format host items with pagination info
+      const hostItemsField = paginationData.totalPages > 1 
+        ? `${paginationData.text}\n\n*Page ${paginationData.page}/${paginationData.totalPages}*`
+        : paginationData.text;
       
-      embed.addFields({
-        name: `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
-        value: hostItemsText,
-        inline: false
-      });
+      addFieldSafely(embed, 
+        `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
+        hostItemsField,
+        false
+      );
 
       const offerButton = new ButtonBuilder()
         .setCustomId('trade_offer_button')
@@ -4053,9 +5308,19 @@ async function getRobloxAvatarUrl(userId) {
         .setStyle(ButtonStyle.Danger);
 
       const row = new ActionRowBuilder().addComponents(offerButton, deleteButton);
+      const components = [row];
+
+      // Add pagination buttons if there are multiple pages
+      if (paginationData.hasMultiplePages) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`trade_page_prev_${Date.now()}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId(`trade_page_next_${Date.now()}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(paginationData.page === paginationData.totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       const targetChannel = redirectTradeChannelId ? interaction.guild.channels.cache.get(redirectTradeChannelId) : interaction.channel;
-      const message = await targetChannel.send({ embeds: [embed], components: [row] });
+      const message = await targetChannel.send({ embeds: [embed], components });
 
       const trade = {
         host: interaction.user,
@@ -4066,7 +5331,9 @@ async function getRobloxAvatarUrl(userId) {
         messageId: message.id,
         accepted: false,
         acceptedUser: null,
-        targetUsername: targetUsername
+        targetUsername: targetUsername,
+        currentPage: 1,
+        itemsPerPage: 10
       };
 
       trades.set(message.id, trade);
@@ -4079,7 +5346,78 @@ async function getRobloxAvatarUrl(userId) {
       return;
     }
 
+    if (interaction.customId.startsWith('trade_page_prev_') || interaction.customId.startsWith('trade_page_next_')) {
+      const messageId = interaction.message.id;
+      const trade = trades.get(messageId);
+      
+      if (!trade) {
+        await interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const currentPage = trade.currentPage || 1;
+      const totalPages = Math.ceil(trade.hostItems.length / (trade.itemsPerPage || 10));
+      let newPage = currentPage;
+
+      if (interaction.customId.startsWith('trade_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('trade_page_next_') && currentPage < totalPages) newPage++;
+
+      trade.currentPage = newPage;
+
+      // Get paginated items
+      const paginationData = paginateTradeItems(trade.hostItems, newPage, trade.itemsPerPage);
+
+      // Update embed with new page
+      const embed = new EmbedBuilder()
+        .setTitle('Trade Offer')
+        .setDescription(`**Host:** <@${trade.host.id}>\n**Status:** Waiting for offers`)
+        .setColor(0x0099ff)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+      // Format with pagination info
+      const hostItemsField = totalPages > 1 
+        ? `${paginationData.text}\n\n*Page ${newPage}/${totalPages}*`
+        : paginationData.text;
+
+      addFieldSafely(embed,
+        `Host Items${trade.hostDiamonds > 0 ? ` + ${formatBid(trade.hostDiamonds)} 💎` : ''}`,
+        hostItemsField,
+        false
+      );
+
+      // Update pagination buttons
+      const offerButton = new ButtonBuilder()
+        .setCustomId('trade_offer_button')
+        .setLabel('Make Offer')
+        .setStyle(ButtonStyle.Primary);
+
+      const deleteButton = new ButtonBuilder()
+        .setCustomId(`trade_delete_${interaction.message.createdTimestamp}`)
+        .setLabel('Delete')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(offerButton, deleteButton);
+      const components = [row];
+
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`trade_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`trade_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
+    }
+
     if (interaction.customId.startsWith('offer_submit_modal_')) {
+      // Defer the reply to avoid timeout on long operations
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      }
+
       const messageId = interaction.customId.replace('offer_submit_modal_', '');
       const diamondsStr = interaction.fields.getTextInputValue('offer_diamonds') || '0';
 
@@ -4089,15 +5427,22 @@ async function getRobloxAvatarUrl(userId) {
       }
 
       const offerItems = interaction.user.offerItems || [];
+      
+      // Validate item count before finalizing
+      const isValid = await validateItemCount(interaction, 'offerTradeCount', offerItems.length, offerItems);
+      if (!isValid) {
+        return sendErrorReply(interaction, 'E50', 'Item count validation failed. Please try again.');
+      }
+      
       delete interaction.user.offerItems;
       delete interaction.user.messageId;
 
       const trade = trades.get(messageId);
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: 64 });
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       // Check if user is the trade host
       if (trade.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ You cannot make an offer on your own trade!', flags: 64 });
+        return await sendErrorReply(interaction, 'E04');
       }
 
       // Add offer to trade
@@ -4117,17 +5462,21 @@ async function getRobloxAvatarUrl(userId) {
         await channel.send(`📢 <@${trade.host.id}>, you received an offer from <@${interaction.user.id}>!`);
       }
 
-      await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
+      if (interaction.deferred) {
+        await interaction.editReply({ content: `Offer submitted! Host will accept or decline.` });
+      } else {
+        await interaction.reply({ content: `Offer submitted! Host will accept or decline.`, flags: 64 });
+      }
       return;
     }
 
     if (interaction.customId === 'bid_modal') {
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
-      if (!auction) return interaction.reply({ content: 'No auction running.', flags: MessageFlags.Ephemeral });
+      if (!auction) return sendErrorReply(interaction, 'E16');
 
       // Check if user is the auction host
       if (auction.host.id === interaction.user.id) {
-        return interaction.reply({ content: '❌ You cannot bid on your own auction!', flags: MessageFlags.Ephemeral });
+        return await sendErrorReply(interaction, 'E21');
       }
 
       const diamondsStr = interaction.fields.getTextInputValue('diamonds');
@@ -4138,22 +5487,22 @@ async function getRobloxAvatarUrl(userId) {
         diamonds = parseBid(diamondsStr);
       }
 
-      if (auction.model === 'items' && diamonds > 0) return interaction.reply({ content: 'This auction is offers only.', flags: MessageFlags.Ephemeral });
-      if (auction.model === 'diamonds' && items) return interaction.reply({ content: 'This auction is diamonds only.', flags: MessageFlags.Ephemeral });
-      if (auction.model === 'diamonds' && diamonds === 0) return interaction.reply({ content: 'Please enter diamonds.', flags: MessageFlags.Ephemeral });
-      if (auction.model === 'items' && !items) return interaction.reply({ content: 'Please enter an offer.', flags: MessageFlags.Ephemeral });
+      if (auction.model === 'items' && diamonds > 0) return sendErrorReply(interaction, 'E49', 'This auction is offers only');
+      if (auction.model === 'diamonds' && items) return sendErrorReply(interaction, 'E49', 'This auction is diamonds only');
+      if (auction.model === 'diamonds' && diamonds === 0) return sendErrorReply(interaction, 'E11');
+      if (auction.model === 'items' && !items) return sendErrorReply(interaction, 'E11');
 
       // Additional check for 'both' model: if there's a previous bid with only diamonds, don't allow adding diamonds
       if (auction.model === 'both' && diamonds > 0 && auction.bids.some(bid => bid.diamonds > 0 && !bid.items)) {
-        return interaction.reply({ content: 'Since there\'s already a bid with only diamonds, you can only add items to your bid.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E73');
       }
 
       // Check if bid is higher than current max
       const maxBid = auction.bids.length > 0 ? Math.max(...auction.bids.map(b => b.diamonds)) : auction.startingPrice;
-      if (auction.model !== 'items' && diamonds <= maxBid) return interaction.reply({ content: `Your bid must be higher than the current highest bid of ${formatBid(maxBid)} 💎.`, flags: MessageFlags.Ephemeral });
+      if (auction.model !== 'items' && diamonds <= maxBid) return sendErrorReply(interaction, 'E79', `Your bid must be higher than the current highest bid of ${formatBid(maxBid)} 💎`);
 
       auction.bids.push({ user: interaction.user, diamonds, items, timestamp: Date.now() });
-      interaction.reply(`Bid placed: ${diamonds > 0 ? `${formatBid(diamonds)} 💎` : ''}${items ? ` and ${items}` : ''}`);
+      await interaction.reply(`Bid placed: ${diamonds > 0 ? `${formatBid(diamonds)} 💎` : ''}${items ? ` and ${items}` : ''}`);
     }
 
     if (interaction.customId === 'auction_modal') {
@@ -4162,13 +5511,13 @@ async function getRobloxAvatarUrl(userId) {
       const startingPriceStr = interaction.fields.getTextInputValue('starting_price');
       const model = interaction.fields.getTextInputValue('model').toLowerCase();
 
-      if (!['diamonds', 'items', 'both'].includes(model)) return interaction.reply({ content: 'Invalid model. Use diamonds, items/offer, or both.', flags: MessageFlags.Ephemeral });
+      if (!['diamonds', 'items', 'both'].includes(model)) return sendErrorReply(interaction, 'E77');
       const time = 60; // Fixed to 60 seconds
       const startingPrice = parseBid(startingPriceStr);
-      if (isNaN(startingPrice) || startingPrice < 0) return interaction.reply({ content: 'Invalid starting price.', flags: MessageFlags.Ephemeral });
+      if (isNaN(startingPrice) || startingPrice < 0) return sendErrorReply(interaction, 'E78');
 
       if (auctions.size > 0) {
-        return interaction.reply({ content: 'An auction is already running in the server. Please wait for it to end.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E74');
       }
 
       const auction = {
@@ -4184,7 +5533,7 @@ async function getRobloxAvatarUrl(userId) {
       };
 
       const targetChannel = redirectChannelId ? interaction.guild.channels.cache.get(redirectChannelId) : interaction.channel;
-      if (!targetChannel) return interaction.reply({ content: 'Redirect channel not found.', flags: MessageFlags.Ephemeral });
+      if (!targetChannel) return sendErrorReply(interaction, 'E75');
 
       // Send ping message first
       await targetChannel.send('-# ||<@&1461741243427197132>||');
@@ -4245,114 +5594,72 @@ async function getRobloxAvatarUrl(userId) {
 
     if (interaction.customId.startsWith('proof_image_modal_trade_')) {
       const messageId = interaction.customId.replace('proof_image_modal_trade_', '');
+      const imageUrl = interaction.fields.getTextInputValue('proof_image_url') || '';
       const description = interaction.fields.getTextInputValue('proof_description') || '';
       const trade = trades.get(messageId);
 
-      if (!trade) return interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
-
-      // Check if user has attachments
-      if (interaction.message && interaction.message.attachments.size > 0) {
-        // User needs to upload image via button with attachments
-        return interaction.reply({ 
-          content: '❌ Please use the file upload feature. Reply to this message with an image attachment.',
-          flags: MessageFlags.Ephemeral 
-        });
-      }
-
-      // For now, show instruction
-      await interaction.reply({
-        content: '📸 Please attach the proof image to your next message in this channel.\n\nAfter you send the image, the proof will be automatically forwarded to the records channel.',
-        ephemeral: false
-      });
-
-      // Store waiting state
-      interaction.user.waitingForProof = {
-        tradeMessageId: messageId,
-        description: description,
-        type: 'trade'
-      };
-    }
-
-    if (interaction.customId === 'proof_image_modal_auction') {
-      const description = interaction.fields.getTextInputValue('proof_description') || '';
-
-      // Show instruction
-      await interaction.reply({
-        content: '📸 Please attach the proof image to your next message in this channel.\n\nAfter you send the image, the proof will be automatically forwarded to the records channel.',
-        ephemeral: false
-      });
-
-      // Store waiting state
-      interaction.user.waitingForProof = {
-        auctionProofMessageId: interaction.message?.id || null,
-        description: description,
-        type: 'auction'
-      };
-    }
-
-    if (interaction.customId.startsWith('proof_image_modal_giveaway_')) {
-      const messageId = interaction.customId.replace('proof_image_modal_giveaway_', '');
-      const imageUrl = interaction.fields.getTextInputValue('proof_image_url') || '';
-      const description = interaction.fields.getTextInputValue('proof_description') || '';
-      const giveawayData = finishedGiveaways.get(messageId);
-
-      if (!giveawayData) {
-        return interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
-      }
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       // Validate URL
       if (!imageUrl) {
-        return interaction.reply({ content: '❌ Please provide a valid image URL.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E68', 'Image URL is required');
       }
 
-      try {
-        const channel = interaction.guild.channels.cache.get(giveawayData.channelId);
-        if (!channel) {
-          return interaction.reply({ content: '❌ Giveaway channel not found.', flags: MessageFlags.Ephemeral });
-        }
-
-        // Fetch the original giveaway message
-        const giveawayMessage = await channel.messages.fetch(messageId);
-        if (!giveawayMessage) {
-          return interaction.reply({ content: '❌ Giveaway message not found.', flags: MessageFlags.Ephemeral });
-        }
-
-        // Update thumbnail of the giveaway embed
-        if (giveawayMessage.embeds.length > 0) {
-          const updatedEmbed = EmbedBuilder.from(giveawayMessage.embeds[0])
-            .setThumbnail(imageUrl);
-          await giveawayMessage.edit({ embeds: [updatedEmbed] });
-        }
-
-        // Send proof to records channel
-        const proofChannelId = '1462197194646880368';
-        const proofChannel = interaction.guild.channels.cache.get(proofChannelId);
-
-        if (proofChannel) {
-          const proofEmbed = new EmbedBuilder()
-            .setTitle('🎁 Giveaway Proof')
-            .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${description || 'No description provided'}`)
-            .setColor(0xFF1493)
-            .setImage(imageUrl)
-            .setFooter({ text: `Submitted by ${interaction.user.username}` })
-            .setTimestamp();
-
-          await proofChannel.send({ embeds: [proofEmbed] });
-        }
-
-        await interaction.reply({ content: '✅ Proof image has been submitted and the giveaway thumbnail updated!', flags: MessageFlags.Ephemeral });
-      } catch (error) {
-        console.error('Error processing giveaway proof:', error);
-        await interaction.reply({ content: '❌ Error processing proof image.', flags: MessageFlags.Ephemeral });
+      // Add proof image to trade
+      if (!trade.proofImages) {
+        trade.proofImages = [];
       }
+
+      trade.proofImages.push({
+        url: imageUrl,
+        uploadedBy: interaction.user.id,
+        uploadedAt: new Date().toISOString(),
+        description: description
+      });
+
+      // Save trade
+      await redisClient.set(`trade_${messageId}`, JSON.stringify(trade));
+
+      await interaction.reply({
+        content: '✅ Proof image uploaded successfully!',
+        ephemeral: true
+      });
     }
+
+    if (interaction.customId === 'proof_image_modal_auction') {
+      const imageUrl = interaction.fields.getTextInputValue('proof_image_url') || '';
+      const description = interaction.fields.getTextInputValue('proof_description') || '';
+
+      // Validate URL
+      if (!imageUrl) {
+        return sendErrorReply(interaction, 'E68', 'Image URL is required');
+      }
+
+      // Store proof image in user's proof list
+      if (!interaction.user.auctionProofs) {
+        interaction.user.auctionProofs = [];
+      }
+
+      interaction.user.auctionProofs.push({
+        url: imageUrl,
+        uploadedAt: new Date().toISOString(),
+        description: description,
+        auctionMessageId: interaction.message?.id || null
+      });
+
+      await interaction.reply({
+        content: '✅ Proof image uploaded successfully!',
+        ephemeral: true
+      });
+    }
+
 
     if (interaction.customId === 'giveaway_diamonds_modal') {
       const diamondsStr = interaction.fields.getTextInputValue('giveaway_diamonds_amount');
       const diamonds = parseBid(diamondsStr);
 
       if (diamonds <= 0) {
-        return interaction.reply({ content: 'Please enter a valid amount of diamonds.', flags: MessageFlags.Ephemeral });
+        return sendErrorReply(interaction, 'E76');
       }
 
       // Store diamonds as item
@@ -4422,30 +5729,43 @@ async function updateTradeEmbed(guild, trade, messageId) {
       embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** <@${trade.host.id}>`);
     }
 
-    const hostItemsText = formatItemsText(trade.hostItems);
-    embed.addFields({
-      name: `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`,
-      value: hostItemsText,
-      inline: true
-    });
+    // Paginate host items
+    const hostPaginationData = paginateTradeItems(trade.hostItems, 1, 10);
+    const hostItemsField = hostPaginationData.totalPages > 1 
+      ? `${hostPaginationData.text}\n\n*Page 1/${hostPaginationData.totalPages}*`
+      : hostPaginationData.text;
+
+    addFieldSafely(embed,
+      `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`,
+      hostItemsField,
+      true
+    );
 
     if (trade.offers.length > 0 && !trade.accepted) {
       const lastOffer = trade.offers[trade.offers.length - 1];
-      const guestItemsText = formatItemsText(lastOffer.items);
-      embed.addFields({
-        name: `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
-        value: guestItemsText,
-        inline: true
-      });
+      const guestPaginationData = paginateTradeItems(lastOffer.items, 1, 10);
+      const guestItemsField = guestPaginationData.totalPages > 1 
+        ? `${guestPaginationData.text}\n\n*Page 1/${guestPaginationData.totalPages}*`
+        : guestPaginationData.text;
+
+      addFieldSafely(embed,
+        `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
+        guestItemsField,
+        true
+      );
     } else if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
-        const guestItemsText = formatItemsText(acceptedOffer.items);
-        embed.addFields({
-          name: `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`,
-          value: guestItemsText,
-          inline: true
-        });
+        const acceptedPaginationData = paginateTradeItems(acceptedOffer.items, 1, 10);
+        const acceptedItemsField = acceptedPaginationData.totalPages > 1 
+          ? `${acceptedPaginationData.text}\n\n*Page 1/${acceptedPaginationData.totalPages}*`
+          : acceptedPaginationData.text;
+
+        addFieldSafely(embed,
+          `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`,
+          acceptedItemsField,
+          true
+        );
       }
     }
 
