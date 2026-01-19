@@ -836,6 +836,10 @@ client.once('clientReady', async () => {
       name: 'botcmds',
       description: 'View all available bot commands'
     },
+    {
+      name: 'logsdesc',
+      description: 'View all error codes with their descriptions (admin only)'
+    }
   ];
 
   await client.application.commands.set(commands);
@@ -1641,7 +1645,8 @@ client.on('interactionCreate', async (interaction) => {
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
             { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
             { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
-            { name: '/botcmds', value: 'View all available bot commands', inline: false }
+            { name: '/botcmds', value: 'View all available bot commands', inline: false },
+            { name: '/logsdesc', value: 'View all error codes with their descriptions (admin only)', inline: false }
           ]
         }
       ];
@@ -1830,7 +1835,8 @@ client.on('interactionCreate', async (interaction) => {
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
             { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
             { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
-            { name: '/botcmds', value: 'View all available bot commands', inline: false }
+            { name: '/botcmds', value: 'View all available bot commands', inline: false },
+            { name: '/logsdesc', value: 'View all error codes with their descriptions (admin only)', inline: false }
           ]
         }
       ];
