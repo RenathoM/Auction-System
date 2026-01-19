@@ -1696,6 +1696,95 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({ embeds: [embed], components: [buttons] });
     }
+
+    if (commandName === 'logsdesc') {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
+
+      // Get all error codes as array
+      const errorCodesArray = Object.entries(ERROR_CODES).map(([code, description]) => ({
+        code,
+        description,
+        category: getCategoryFromErrorCode(code)
+      }));
+
+      // Sort by code number
+      errorCodesArray.sort((a, b) => {
+        const numA = parseInt(a.code.replace('E', ''));
+        const numB = parseInt(b.code.replace('E', ''));
+        return numA - numB;
+      });
+
+      // Create pages with max 15 items per page
+      const itemsPerPage = 15;
+      const pages = [];
+      
+      for (let i = 0; i < errorCodesArray.length; i += itemsPerPage) {
+        const pageErrors = errorCodesArray.slice(i, i + itemsPerPage);
+        pages.push(pageErrors);
+      }
+
+      if (pages.length === 0) {
+        return interaction.reply({ content: 'No error codes found.', flags: MessageFlags.Ephemeral });
+      }
+
+      let currentPage = 0;
+
+      const createErrorEmbed = (pageIndex) => {
+        const pageErrors = pages[pageIndex];
+        const embed = new EmbedBuilder()
+          .setTitle('📋 Error Codes & Descriptions')
+          .setColor(0x0099ff)
+          .setDescription(`Page ${pageIndex + 1}/${pages.length} (${pages.length === 1 ? errorCodesArray.length : pageIndex === pages.length - 1 ? errorCodesArray.length - (pageIndex * itemsPerPage) : itemsPerPage} errors)`)
+          .setFooter({ text: `Made By Atlas | Total Errors: ${errorCodesArray.length}` })
+          .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+        pageErrors.forEach((error) => {
+          const fieldName = `${error.code} - ${error.category}`;
+          embed.addFields({ name: fieldName, value: error.description, inline: false });
+        });
+
+        return embed;
+      };
+
+      const createErrorButtons = (pageIndex) => {
+        const row = new ActionRowBuilder();
+
+        if (pageIndex > 0) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`logsdesc_prev_${pageIndex}`)
+              .setLabel('← Previous')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`logsdesc_page`)
+            .setLabel(`${pageIndex + 1}/${pages.length}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(true)
+        );
+
+        if (pageIndex < pages.length - 1) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`logsdesc_next_${pageIndex}`)
+              .setLabel('Next →')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        return row;
+      };
+
+      const embed = createErrorEmbed(currentPage);
+      const buttons = createErrorButtons(currentPage);
+
+      await interaction.reply({ embeds: [embed], components: [buttons] });
+    }
   }
 
   if (interaction.isButton()) {
@@ -1798,6 +1887,93 @@ client.on('interactionCreate', async (interaction) => {
 
       const embed = createEmbed(currentPage);
       const buttons = createButtons(currentPage);
+
+      await interaction.update({ embeds: [embed], components: [buttons] });
+      return;
+    }
+
+    // Handle logsdesc pagination
+    if (interaction.customId.startsWith('logsdesc_')) {
+      const errorCodesArray = Object.entries(ERROR_CODES).map(([code, description]) => ({
+        code,
+        description,
+        category: getCategoryFromErrorCode(code)
+      }));
+
+      // Sort by code number
+      errorCodesArray.sort((a, b) => {
+        const numA = parseInt(a.code.replace('E', ''));
+        const numB = parseInt(b.code.replace('E', ''));
+        return numA - numB;
+      });
+
+      // Create pages with max 15 items per page
+      const itemsPerPage = 15;
+      const pages = [];
+      
+      for (let i = 0; i < errorCodesArray.length; i += itemsPerPage) {
+        const pageErrors = errorCodesArray.slice(i, i + itemsPerPage);
+        pages.push(pageErrors);
+      }
+
+      let currentPage = 0;
+      if (interaction.customId.includes('_prev_')) {
+        currentPage = parseInt(interaction.customId.split('_prev_')[1]) - 1;
+      } else if (interaction.customId.includes('_next_')) {
+        currentPage = parseInt(interaction.customId.split('_next_')[1]) + 1;
+      }
+
+      const createErrorEmbed = (pageIndex) => {
+        const pageErrors = pages[pageIndex];
+        const embed = new EmbedBuilder()
+          .setTitle('📋 Error Codes & Descriptions')
+          .setColor(0x0099ff)
+          .setDescription(`Page ${pageIndex + 1}/${pages.length} (${pages.length === 1 ? errorCodesArray.length : pageIndex === pages.length - 1 ? errorCodesArray.length - (pageIndex * itemsPerPage) : itemsPerPage} errors)`)
+          .setFooter({ text: `Made By Atlas | Total Errors: ${errorCodesArray.length}` })
+          .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+        pageErrors.forEach((error) => {
+          const fieldName = `${error.code} - ${error.category}`;
+          embed.addFields({ name: fieldName, value: error.description, inline: false });
+        });
+
+        return embed;
+      };
+
+      const createErrorButtons = (pageIndex) => {
+        const row = new ActionRowBuilder();
+
+        if (pageIndex > 0) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`logsdesc_prev_${pageIndex}`)
+              .setLabel('← Previous')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`logsdesc_page`)
+            .setLabel(`${pageIndex + 1}/${pages.length}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(true)
+        );
+
+        if (pageIndex < pages.length - 1) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`logsdesc_next_${pageIndex}`)
+              .setLabel('Next →')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        return row;
+      };
+
+      const embed = createErrorEmbed(currentPage);
+      const buttons = createErrorButtons(currentPage);
 
       await interaction.update({ embeds: [embed], components: [buttons] });
       return;
