@@ -243,8 +243,39 @@ function getSuspensionRestrictions(type) {
   return restrictions[type] || 'Unknown restrictions';
 }
 
+// Function to parse duration string (e.g., "1h", "30m", "2d") to milliseconds
+function parseDuration(durationStr) {
+  const regex = /^(\d+)([smhd])$/i;
+  const match = durationStr.match(regex);
+  if (!match) return SUSPENSION_DURATION; // Default to 24 hours
+
+  const value = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+
+  switch (unit) {
+    case 's': return value * 1000; // seconds
+    case 'm': return value * 60 * 1000; // minutes
+    case 'h': return value * 60 * 60 * 1000; // hours
+    case 'd': return value * 24 * 60 * 60 * 1000; // days
+    default: return SUSPENSION_DURATION;
+  }
+}
+
+// Function to format duration in milliseconds to readable string
+function formatDuration(ms) {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
+  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+  if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+  return `${seconds} second${seconds > 1 ? 's' : ''}`;
+}
+
 // Function to apply suspension to a user
-async function applySuspension(guild, userId, type) {
+async function applySuspension(guild, userId, type, adminId = null, customDuration = null, customReason = null) {
   try {
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) return;
@@ -255,33 +286,48 @@ async function applySuspension(guild, userId, type) {
     // Add role
     await member.roles.add(roleId).catch(() => null);
 
+    // Calculate duration
+    const duration = customDuration ? parseDuration(customDuration) : SUSPENSION_DURATION;
+
     // Record suspension
     userSuspensions.set(userId, {
       type,
       startTime: Date.now(),
-      roleId
+      roleId,
+      duration
     });
 
     // Send suspension embed to alert channel
     const alertChannel = guild.channels.cache.get(ALERT_CHANNEL);
     if (alertChannel) {
+      const isAdminSuspension = adminId !== null;
+      const adminMember = adminId ? await guild.members.fetch(adminId).catch(() => null) : null;
+
       const suspensionEmbed = new EmbedBuilder()
-        .setTitle('🚫 User Suspension Applied')
+        .setTitle(isAdminSuspension ? '🚫 User Suspension Applied (Admin)' : '🚫 User Suspension Applied')
         .setColor(0xff0000)
-        .setDescription(`A user has been suspended for failing to upload proof within the timeout period.`)
+        .setDescription(isAdminSuspension
+          ? `A user has been suspended by an administrator.`
+          : `A user has been suspended for failing to upload proof within the timeout period.`)
         .addFields(
           { name: '👤 User', value: `<@${userId}> (${userId})`, inline: true },
           { name: '🏷️ Type', value: type.charAt(0).toUpperCase() + type.slice(1), inline: true },
-          { name: '⏰ Duration', value: '24 hours', inline: true },
+          { name: '⏰ Duration', value: formatDuration(duration), inline: true },
           { name: '🎭 Role Added', value: `<@&${roleId}>`, inline: true },
           { name: '📅 Suspended At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-          { name: '⏳ Expires At', value: `<t:${Math.floor((Date.now() + SUSPENSION_DURATION) / 1000)}:F>`, inline: true },
-          { name: '📋 Reason', value: `Failed to upload proof image for ${type} within 9 minutes timeout`, inline: false },
+          { name: '⏳ Expires At', value: `<t:${Math.floor((Date.now() + duration) / 1000)}:F>`, inline: true },
+          { name: '📋 Reason', value: customReason || `Failed to upload proof image for ${type} within 9 minutes timeout`, inline: false },
           { name: '🚫 Restrictions', value: getSuspensionRestrictions(type), inline: false }
         )
         .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: 'Click "Remove Suspension" to manually remove (Admin Only)' })
         .setTimestamp();
+
+      if (isAdminSuspension && adminMember) {
+        suspensionEmbed.addFields(
+          { name: '👮‍♂️ Suspended By', value: `${adminMember.user.tag} (${adminId})`, inline: true }
+        );
+      }
 
       const removeButton = new ButtonBuilder()
         .setCustomId(`remove_suspension_${userId}`)
@@ -297,9 +343,9 @@ async function applySuspension(guild, userId, type) {
     // Schedule role removal
     setTimeout(async () => {
       await removeSuspension(guild, userId);
-    }, SUSPENSION_DURATION);
+    }, duration);
 
-    botLogs.addLog('SUSPENSION_APPLIED', `User suspended for ${type} proof timeout`, userId, { type, duration: SUSPENSION_DURATION });
+    botLogs.addLog('SUSPENSION_APPLIED', `User suspended for ${type}${adminId ? ` by admin ${adminId}` : ' proof timeout'}`, userId, { type, duration, adminId, reason: customReason });
   } catch (e) {
     console.error('Error applying suspension:', e);
   }
@@ -350,7 +396,7 @@ async function removeSuspension(guild, userId) {
 }
 
 // Function to manually remove suspension (admin only)
-async function manualSuspensionRemoval(guild, userId, adminUserId) {
+async function manualSuspensionRemoval(guild, userId, adminUserId, reason = null) {
   try {
     const suspension = userSuspensions.get(userId);
     if (!suspension) return false;
@@ -374,10 +420,16 @@ async function manualSuspensionRemoval(guild, userId, adminUserId) {
               .setColor(0x00ff00)
               .setDescription('This user\'s suspension has been manually removed by an admin.')
               .addFields(
-                { name: '👮‍♂️ Removed By', value: adminMember ? `${adminMember.user.tag}` : `<@${adminUserId}>`, inline: true },
+                { name: '👮‍♂️ Removed By', value: adminMember ? `${adminMember.user.tag} (${adminUserId})` : `<@${adminUserId}> (${adminUserId})`, inline: true },
                 { name: '📅 Removed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
               )
               .setFooter({ text: 'Suspension manually removed by admin' });
+
+            if (reason) {
+              updatedEmbed.addFields(
+                { name: '📋 Reason', value: reason, inline: false }
+              );
+            }
 
             await message.edit({ embeds: [updatedEmbed], components: [] });
           }
@@ -389,7 +441,7 @@ async function manualSuspensionRemoval(guild, userId, adminUserId) {
     }
 
     userSuspensions.delete(userId);
-    botLogs.addLog('SUSPENSION_REMOVED', `User suspension manually removed by admin ${adminUserId} for ${suspension.type}`, userId, { type: suspension.type, adminId: adminUserId });
+    botLogs.addLog('SUSPENSION_REMOVED', `User suspension manually removed by admin ${adminUserId} for ${suspension.type}${reason ? ` - ${reason}` : ''}`, userId, { type: suspension.type, adminId: adminUserId, reason });
     return true;
   } catch (e) {
     console.error('Error manually removing suspension:', e);
@@ -411,7 +463,8 @@ function checkSuspension(userId, activityType) {
 
   if (!applicableTypes[activityType]?.includes(suspension.type)) return null;
 
-  const timeRemaining = SUSPENSION_DURATION - (Date.now() - suspension.startTime);
+  const duration = suspension.duration || SUSPENSION_DURATION;
+  const timeRemaining = duration - (Date.now() - suspension.startTime);
   if (timeRemaining <= 0) {
     // Suspension expired, remove it
     userSuspensions.delete(userId);
@@ -423,34 +476,6 @@ function checkSuspension(userId, activityType) {
     timeRemaining,
     reason: `Proof timeout for ${suspension.type.toLowerCase()}`
   };
-}
-async function applySuspension(guild, userId, type) {
-  try {
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
-
-    const roleId = SUSPENSION_ROLES[type];
-    if (!roleId) return;
-
-    // Add role
-    await member.roles.add(roleId).catch(() => null);
-
-    // Record suspension
-    userSuspensions.set(userId, {
-      type,
-      startTime: Date.now(),
-      roleId
-    });
-
-    // Schedule role removal
-    setTimeout(async () => {
-      await removeSuspension(guild, userId);
-    }, SUSPENSION_DURATION);
-
-    botLogs.addLog('SUSPENSION_APPLIED', `User suspended for ${type} proof timeout`, userId, { type, duration: SUSPENSION_DURATION });
-  } catch (e) {
-    console.error('Error applying suspension:', e);
-  }
 }
 
 // Function to remove suspension from a user
@@ -469,82 +494,6 @@ async function removeSuspension(guild, userId) {
   } catch (e) {
     console.error('Error removing suspension:', e);
   }
-}
-
-// Function to manually remove suspension (admin only)
-async function manualSuspensionRemoval(guild, userId, adminUserId) {
-  try {
-    const suspension = userSuspensions.get(userId);
-    if (!suspension) return false;
-
-    const member = await guild.members.fetch(userId).catch(() => null);
-    if (member && suspension.roleId) {
-      await member.roles.remove(suspension.roleId).catch(() => null);
-    }
-
-    // Update suspension embed to green (manually removed)
-    const embedMessageId = suspensionEmbeds.get(userId);
-    if (embedMessageId) {
-      const alertChannel = guild.channels.cache.get(ALERT_CHANNEL);
-      if (alertChannel) {
-        try {
-          const message = await alertChannel.messages.fetch(embedMessageId);
-          if (message && message.embeds.length > 0) {
-            const adminMember = await guild.members.fetch(adminUserId).catch(() => null);
-            const updatedEmbed = EmbedBuilder.from(message.embeds[0])
-              .setTitle('✅ User Suspension Manually Removed')
-              .setColor(0x00ff00)
-              .setDescription('This user\'s suspension has been manually removed by an admin.')
-              .addFields(
-                { name: '👮‍♂️ Removed By', value: adminMember ? `${adminMember.user.tag}` : `<@${adminUserId}>`, inline: true },
-                { name: '📅 Removed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-              )
-              .setFooter({ text: 'Suspension manually removed by admin' });
-
-            await message.edit({ embeds: [updatedEmbed], components: [] });
-          }
-        } catch (e) {
-          // Message might have been deleted, ignore
-        }
-      }
-      suspensionEmbeds.delete(userId);
-    }
-
-    userSuspensions.delete(userId);
-    botLogs.addLog('SUSPENSION_REMOVED', `User suspension manually removed by admin ${adminUserId} for ${suspension.type}`, userId, { type: suspension.type, adminId: adminUserId });
-    return true;
-  } catch (e) {
-    console.error('Error manually removing suspension:', e);
-    return false;
-  }
-}
-
-// Function to check if user is suspended for a specific activity
-function checkSuspension(userId, activityType) {
-  const suspension = userSuspensions.get(userId);
-  if (!suspension) return null;
-
-  // Check if suspension applies to this activity
-  const applicableTypes = {
-    'trade': ['TRADE'],
-    'giveaway': ['GIVEAWAY'],
-    'auction': ['AUCTION']
-  };
-
-  if (!applicableTypes[activityType]?.includes(suspension.type)) return null;
-
-  const timeRemaining = SUSPENSION_DURATION - (Date.now() - suspension.startTime);
-  if (timeRemaining <= 0) {
-    // Suspension expired, remove it
-    userSuspensions.delete(userId);
-    return null;
-  }
-
-  return {
-    type: suspension.type,
-    timeRemaining,
-    reason: `Proof timeout for ${suspension.type.toLowerCase()}`
-  };
 }
 
 // Proof upload tracking system (for timeouts)
@@ -1740,6 +1689,64 @@ client.once('clientReady', async () => {
         }
       ]
     },
+    {
+      name: 'suspend',
+      description: 'Suspend a user from a specific category (admin only)',
+      options: [
+        {
+          name: 'user',
+          type: ApplicationCommandOptionType.User,
+          description: 'The user to suspend',
+          required: true
+        },
+        {
+          name: 'category',
+          type: ApplicationCommandOptionType.String,
+          description: 'The category to suspend from',
+          required: true,
+          choices: [
+            { name: 'Trade', value: 'TRADE' },
+            { name: 'Giveaway', value: 'GIVEAWAY' },
+            { name: 'Auction', value: 'AUCTION' }
+          ]
+        },
+        {
+          name: 'time',
+          type: ApplicationCommandOptionType.String,
+          description: 'Suspension duration (e.g., 1h, 30m, 2d)',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'unsuspend',
+      description: 'Remove suspension from a user (admin only)',
+      options: [
+        {
+          name: 'user',
+          type: ApplicationCommandOptionType.User,
+          description: 'The user to unsuspend',
+          required: true
+        },
+        {
+          name: 'category',
+          type: ApplicationCommandOptionType.String,
+          description: 'The category to unsuspend from',
+          required: true,
+          choices: [
+            { name: 'Trade', value: 'TRADE' },
+            { name: 'Giveaway', value: 'GIVEAWAY' },
+            { name: 'Auction', value: 'AUCTION' }
+          ]
+        },
+        {
+          name: 'reason',
+          type: ApplicationCommandOptionType.String,
+          description: 'Reason for unsuspension',
+          required: true
+        }
+      ]
+    }
   ];
 
   await client.application.commands.set(commands);
@@ -2666,6 +2673,71 @@ client.on('interactionCreate', async (interaction) => {
       } catch (error) {
         console.error('Error saving data:', error);
         await sendErrorReply(interaction, 'E46');
+      }
+    }
+
+    if (commandName === 'suspend') {
+      // Check if user has admin role
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
+
+      await logAdminCommand(interaction, commandName);
+
+      const targetUser = interaction.options.getUser('user');
+      const category = interaction.options.getString('category');
+      const timeStr = interaction.options.getString('time');
+
+      try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Check if user is already suspended for this category
+        const existingSuspension = checkSuspension(targetUser.id, category.toLowerCase());
+        if (existingSuspension) {
+          return await interaction.editReply({ content: `❌ User <@${targetUser.id}> is already suspended for ${category.toLowerCase()} activities.` });
+        }
+
+        // Apply suspension
+        await applySuspension(interaction.guild, targetUser.id, category, interaction.user.id, parseDuration(timeStr), `Manually suspended by admin`);
+
+        await interaction.editReply({ content: `✅ User <@${targetUser.id}> has been suspended for ${category} activities for ${formatDuration(parseDuration(timeStr))}.` });
+      } catch (error) {
+        console.error('Error suspending user:', error);
+        await interaction.editReply({ content: '❌ An error occurred while suspending the user.' });
+      }
+    }
+
+    if (commandName === 'unsuspend') {
+      // Check if user has admin role
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E01');
+
+      await logAdminCommand(interaction, commandName);
+
+      const targetUser = interaction.options.getUser('user');
+      const category = interaction.options.getString('category');
+      const reason = interaction.options.getString('reason');
+
+      try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Check if user is suspended for this category
+        const suspension = checkSuspension(targetUser.id, category.toLowerCase());
+        if (!suspension) {
+          return await interaction.editReply({ content: `❌ User <@${targetUser.id}> is not suspended for ${category.toLowerCase()} activities.` });
+        }
+
+        // Remove suspension
+        const success = await manualSuspensionRemoval(interaction.guild, targetUser.id, interaction.user.id, reason);
+        if (success) {
+          await interaction.editReply({ content: `✅ User <@${targetUser.id}> has been unsuspended from ${category} activities.` });
+        } else {
+          await interaction.editReply({ content: '❌ An error occurred while uns suspending the user.' });
+        }
+      } catch (error) {
+        console.error('Error uns suspending user:', error);
+        await interaction.editReply({ content: '❌ An error occurred while uns suspending the user.' });
       }
     }
 
