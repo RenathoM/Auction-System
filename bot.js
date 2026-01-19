@@ -175,7 +175,7 @@ const itemEmojis = {
   'HugeRainbowElectricUnicorn': '<:HugeRainbowElectricUnicorn:1462579057353822314>',
 
   // Exclusives
-  'BlazingShark': '<:BlazingShark:BlazingShark>',
+  'BlazingShark': '<:BlazingShark:1462562761018970122>',
   'BlazingBat': '<:BlazingBat:1462562765741752524>',
   'BlazingCorgi': '<:BlazingCorgi:1462562763909107906>',
   'IceCubeGingerbreadCat': '<:IceCubeGingerbreadCat:1462562784851005525>',
