@@ -5347,7 +5347,7 @@ async function getRobloxAvatarUrl(userId) {
 
       // Show instruction
       await interaction.reply({
-        content: '📸 Please attach the proof image to your next message in this channel.\n\nAfter you send the image, the proof will be automatically forwarded to the records channel.',
+        content: '📸 Please attach the proof image to your next message in this channel.\n\n| > Take a screenshot of the screen where you are making the trade, send the image via any DM, go to the image page, copy the image link, and paste the image link into the input box of the "Upload Proof Image" button.',
         ephemeral: false
       });
 
