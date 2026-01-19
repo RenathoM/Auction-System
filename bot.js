@@ -1900,6 +1900,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
      if (interaction.customId === 'trade_page_prev' || interaction.customId === 'trade_page_next') {
+       if (!interaction.user || !interaction.user.tradeItems) {
+         return interaction.reply({ content: 'Session expired. Please start over.', flags: MessageFlags.Ephemeral });
+       }
        const currentPage = interaction.user.currentTradePage || 1;
        const totalPages = Math.ceil(interaction.user.tradeItems.length / 15);
        let newPage = currentPage;
@@ -1938,6 +1941,9 @@ client.on('interactionCreate', async (interaction) => {
        await interaction.update({ embeds: [embed], components });
        return;
      }
+      if (!interaction.user || !interaction.user.inventoryItems) {
+        return interaction.reply({ content: 'Session expired. Please start over.', flags: MessageFlags.Ephemeral });
+      }
       const currentPage = interaction.user.currentInventoryPage || 1;
       const totalPages = Math.ceil(interaction.user.inventoryItems.length / 15);
       let newPage = currentPage;
@@ -1978,6 +1984,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'giveaway_page_prev' || interaction.customId === 'giveaway_page_next') {
+      if (!interaction.user || !interaction.user.giveawayItems) {
+        return interaction.reply({ content: 'Session expired. Please start over.', flags: MessageFlags.Ephemeral });
+      }
       const currentPage = interaction.user.currentGiveawayPage || 1;
       const totalPages = Math.ceil(interaction.user.giveawayItems.length / 15);
       let newPage = currentPage;
