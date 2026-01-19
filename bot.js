@@ -4456,13 +4456,25 @@ async function getRobloxAvatarUrl(userId) {
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format host items with quantities
-      const hostItemsText = formatItemsText(hostItems);
+      let hostItemsText = formatItemsText(hostItems);
+      // Ensure field value is not empty and valid
+      if (!hostItemsText || hostItemsText.trim() === '') {
+        hostItemsText = 'None';
+      }
+      // Truncate if too long for Discord embed field (1024 character limit)
+      if (hostItemsText.length > 1020) {
+        hostItemsText = hostItemsText.substring(0, 1017) + '...';
+      }
       
-      embed.addFields({
-        name: `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
-        value: hostItemsText,
-        inline: false
-      });
+      const fieldName = `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`;
+      // Ensure field name is not empty
+      if (fieldName && fieldName.trim() !== '') {
+        embed.addFields({
+          name: fieldName,
+          value: hostItemsText,
+          inline: false
+        });
+      }
 
       const offerButton = new ButtonBuilder()
         .setCustomId('trade_offer_button')
@@ -4845,29 +4857,65 @@ async function updateTradeEmbed(guild, trade, messageId) {
     }
 
     const hostItemsText = formatItemsText(trade.hostItems);
-    embed.addFields({
-      name: `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`,
-      value: hostItemsText,
-      inline: true
-    });
+    // Validate field value
+    let validHostItemsText = hostItemsText;
+    if (!validHostItemsText || validHostItemsText.trim() === '') {
+      validHostItemsText = 'None';
+    }
+    if (validHostItemsText.length > 1020) {
+      validHostItemsText = validHostItemsText.substring(0, 1017) + '...';
+    }
+    
+    const hostFieldName = `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`;
+    if (hostFieldName && hostFieldName.trim() !== '') {
+      embed.addFields({
+        name: hostFieldName,
+        value: validHostItemsText,
+        inline: true
+      });
+    }
 
     if (trade.offers.length > 0 && !trade.accepted) {
       const lastOffer = trade.offers[trade.offers.length - 1];
       const guestItemsText = formatItemsText(lastOffer.items);
-      embed.addFields({
-        name: `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
-        value: guestItemsText,
-        inline: true
-      });
+      // Validate field value
+      let validGuestItemsText = guestItemsText;
+      if (!validGuestItemsText || validGuestItemsText.trim() === '') {
+        validGuestItemsText = 'None';
+      }
+      if (validGuestItemsText.length > 1020) {
+        validGuestItemsText = validGuestItemsText.substring(0, 1017) + '...';
+      }
+      
+      const guestFieldName = `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`;
+      if (guestFieldName && guestFieldName.trim() !== '') {
+        embed.addFields({
+          name: guestFieldName,
+          value: validGuestItemsText,
+          inline: true
+        });
+      }
     } else if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
         const guestItemsText = formatItemsText(acceptedOffer.items);
-        embed.addFields({
-          name: `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`,
-          value: guestItemsText,
-          inline: true
-        });
+        // Validate field value
+        let validGuestItemsText = guestItemsText;
+        if (!validGuestItemsText || validGuestItemsText.trim() === '') {
+          validGuestItemsText = 'None';
+        }
+        if (validGuestItemsText.length > 1020) {
+          validGuestItemsText = validGuestItemsText.substring(0, 1017) + '...';
+        }
+        
+        const guestFieldName = `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`;
+        if (guestFieldName && guestFieldName.trim() !== '') {
+          embed.addFields({
+            name: guestFieldName,
+            value: validGuestItemsText,
+            inline: true
+          });
+        }
       }
     }
 
