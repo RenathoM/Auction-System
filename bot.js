@@ -2310,8 +2310,7 @@ client.on('interactionCreate', async (interaction) => {
         const emoji = getItemEmoji(item.name);
         deleteSelect.addOptions({
           label: `${formatItemName(item.name)} (x${item.quantity})`,
-          value: `${index}`,
-          emoji: emoji || '📦'
+          value: `${index}`
         });
       });
 
@@ -2722,8 +2721,7 @@ client.on('interactionCreate', async (interaction) => {
           const emoji = getItemEmoji(item.name);
           removeSelect.addOptions({
             label: `${formatItemName(item.name)} (x${item.quantity})`,
-            value: `${index}`,
-            emoji: emoji || '📦'
+            value: `${index}`
           });
         });
 
@@ -2866,8 +2864,7 @@ client.on('interactionCreate', async (interaction) => {
           const emoji = getItemEmoji(item.name);
           removeSelect.addOptions({
             label: `${formatItemName(item.name)} (x${item.quantity})`,
-            value: `${index}`,
-            emoji: emoji || '📦'
+            value: `${index}`
           });
         });
 
@@ -2985,8 +2982,7 @@ client.on('interactionCreate', async (interaction) => {
           const emoji = getItemEmoji(item.name);
           removeSelect.addOptions({
             label: `${formatItemName(item.name)} (x${item.quantity})`,
-            value: `${index}`,
-            emoji: emoji || '📦'
+            value: `${index}`
           });
         });
 
