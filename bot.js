@@ -230,7 +230,200 @@ const SUSPENSION_ROLES = {
 // Suspension tracking: userId -> { type, startTime, roleId }
 const userSuspensions = new Map();
 
+// Suspension embed tracking: userId -> messageId
+const suspensionEmbeds = new Map();
+
+// Function to get suspension restrictions text
+function getSuspensionRestrictions(type) {
+  const restrictions = {
+    TRADE: '• Cannot create new trades\n• Cannot make offers on other users\' trades\n• Cannot accept or decline own trades',
+    GIVEAWAY: '• Cannot create new giveaways\n• Cannot participate in other users\' giveaways',
+    AUCTION: '• Cannot create new auctions\n• Cannot bid on other users\' auctions'
+  };
+  return restrictions[type] || 'Unknown restrictions';
+}
+
 // Function to apply suspension to a user
+async function applySuspension(guild, userId, type) {
+  try {
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    const roleId = SUSPENSION_ROLES[type];
+    if (!roleId) return;
+
+    // Add role
+    await member.roles.add(roleId).catch(() => null);
+
+    // Record suspension
+    userSuspensions.set(userId, {
+      type,
+      startTime: Date.now(),
+      roleId
+    });
+
+    // Send suspension embed to alert channel
+    const alertChannel = guild.channels.cache.get(ALERT_CHANNEL);
+    if (alertChannel) {
+      const suspensionEmbed = new EmbedBuilder()
+        .setTitle('🚫 User Suspension Applied')
+        .setColor(0xff0000)
+        .setDescription(`A user has been suspended for failing to upload proof within the timeout period.`)
+        .addFields(
+          { name: '👤 User', value: `<@${userId}> (${userId})`, inline: true },
+          { name: '🏷️ Type', value: type.charAt(0).toUpperCase() + type.slice(1), inline: true },
+          { name: '⏰ Duration', value: '24 hours', inline: true },
+          { name: '🎭 Role Added', value: `<@&${roleId}>`, inline: true },
+          { name: '📅 Suspended At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+          { name: '⏳ Expires At', value: `<t:${Math.floor((Date.now() + SUSPENSION_DURATION) / 1000)}:F>`, inline: true },
+          { name: '📋 Reason', value: `Failed to upload proof image for ${type} within 9 minutes timeout`, inline: false },
+          { name: '🚫 Restrictions', value: getSuspensionRestrictions(type), inline: false }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: 'Click "Remove Suspension" to manually remove (Admin Only)' })
+        .setTimestamp();
+
+      const removeButton = new ButtonBuilder()
+        .setCustomId(`remove_suspension_${userId}`)
+        .setLabel('Remove Suspension')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(removeButton);
+
+      const message = await alertChannel.send({ embeds: [suspensionEmbed], components: [row] });
+      suspensionEmbeds.set(userId, message.id);
+    }
+
+    // Schedule role removal
+    setTimeout(async () => {
+      await removeSuspension(guild, userId);
+    }, SUSPENSION_DURATION);
+
+    botLogs.addLog('SUSPENSION_APPLIED', `User suspended for ${type} proof timeout`, userId, { type, duration: SUSPENSION_DURATION });
+  } catch (e) {
+    console.error('Error applying suspension:', e);
+  }
+}
+
+// Function to remove suspension from a user
+async function removeSuspension(guild, userId) {
+  try {
+    const suspension = userSuspensions.get(userId);
+    if (!suspension) return;
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (member && suspension.roleId) {
+      await member.roles.remove(suspension.roleId).catch(() => null);
+    }
+
+    // Update suspension embed to green (expired)
+    const embedMessageId = suspensionEmbeds.get(userId);
+    if (embedMessageId) {
+      const alertChannel = guild.channels.cache.get(ALERT_CHANNEL);
+      if (alertChannel) {
+        try {
+          const message = await alertChannel.messages.fetch(embedMessageId);
+          if (message && message.embeds.length > 0) {
+            const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+              .setTitle('✅ User Suspension Expired')
+              .setColor(0x00ff00)
+              .setDescription('This user\'s suspension has automatically expired.')
+              .addFields(
+                { name: '📅 Expired At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+              )
+              .setFooter({ text: 'Suspension automatically removed' });
+
+            await message.edit({ embeds: [updatedEmbed], components: [] });
+          }
+        } catch (e) {
+          // Message might have been deleted, ignore
+        }
+      }
+      suspensionEmbeds.delete(userId);
+    }
+
+    userSuspensions.delete(userId);
+    botLogs.addLog('SUSPENSION_REMOVED', `User suspension expired for ${suspension.type}`, userId, { type: suspension.type });
+  } catch (e) {
+    console.error('Error removing suspension:', e);
+  }
+}
+
+// Function to manually remove suspension (admin only)
+async function manualSuspensionRemoval(guild, userId, adminUserId) {
+  try {
+    const suspension = userSuspensions.get(userId);
+    if (!suspension) return false;
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (member && suspension.roleId) {
+      await member.roles.remove(suspension.roleId).catch(() => null);
+    }
+
+    // Update suspension embed to green (manually removed)
+    const embedMessageId = suspensionEmbeds.get(userId);
+    if (embedMessageId) {
+      const alertChannel = guild.channels.cache.get(ALERT_CHANNEL);
+      if (alertChannel) {
+        try {
+          const message = await alertChannel.messages.fetch(embedMessageId);
+          if (message && message.embeds.length > 0) {
+            const adminMember = await guild.members.fetch(adminUserId).catch(() => null);
+            const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+              .setTitle('✅ User Suspension Manually Removed')
+              .setColor(0x00ff00)
+              .setDescription('This user\'s suspension has been manually removed by an admin.')
+              .addFields(
+                { name: '👮‍♂️ Removed By', value: adminMember ? `${adminMember.user.tag}` : `<@${adminUserId}>`, inline: true },
+                { name: '📅 Removed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+              )
+              .setFooter({ text: 'Suspension manually removed by admin' });
+
+            await message.edit({ embeds: [updatedEmbed], components: [] });
+          }
+        } catch (e) {
+          // Message might have been deleted, ignore
+        }
+      }
+      suspensionEmbeds.delete(userId);
+    }
+
+    userSuspensions.delete(userId);
+    botLogs.addLog('SUSPENSION_REMOVED', `User suspension manually removed by admin ${adminUserId} for ${suspension.type}`, userId, { type: suspension.type, adminId: adminUserId });
+    return true;
+  } catch (e) {
+    console.error('Error manually removing suspension:', e);
+    return false;
+  }
+}
+
+// Function to check if user is suspended for a specific activity
+function checkSuspension(userId, activityType) {
+  const suspension = userSuspensions.get(userId);
+  if (!suspension) return null;
+
+  // Check if suspension applies to this activity
+  const applicableTypes = {
+    'trade': ['TRADE'],
+    'giveaway': ['GIVEAWAY'],
+    'auction': ['AUCTION']
+  };
+
+  if (!applicableTypes[activityType]?.includes(suspension.type)) return null;
+
+  const timeRemaining = SUSPENSION_DURATION - (Date.now() - suspension.startTime);
+  if (timeRemaining <= 0) {
+    // Suspension expired, remove it
+    userSuspensions.delete(userId);
+    return null;
+  }
+
+  return {
+    type: suspension.type,
+    timeRemaining,
+    reason: `Proof timeout for ${suspension.type.toLowerCase()}`
+  };
+}
 async function applySuspension(guild, userId, type) {
   try {
     const member = await guild.members.fetch(userId).catch(() => null);
@@ -275,6 +468,54 @@ async function removeSuspension(guild, userId) {
     botLogs.addLog('SUSPENSION_REMOVED', `User suspension expired for ${suspension.type}`, userId, { type: suspension.type });
   } catch (e) {
     console.error('Error removing suspension:', e);
+  }
+}
+
+// Function to manually remove suspension (admin only)
+async function manualSuspensionRemoval(guild, userId, adminUserId) {
+  try {
+    const suspension = userSuspensions.get(userId);
+    if (!suspension) return false;
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (member && suspension.roleId) {
+      await member.roles.remove(suspension.roleId).catch(() => null);
+    }
+
+    // Update suspension embed to green (manually removed)
+    const embedMessageId = suspensionEmbeds.get(userId);
+    if (embedMessageId) {
+      const alertChannel = guild.channels.cache.get(ALERT_CHANNEL);
+      if (alertChannel) {
+        try {
+          const message = await alertChannel.messages.fetch(embedMessageId);
+          if (message && message.embeds.length > 0) {
+            const adminMember = await guild.members.fetch(adminUserId).catch(() => null);
+            const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+              .setTitle('✅ User Suspension Manually Removed')
+              .setColor(0x00ff00)
+              .setDescription('This user\'s suspension has been manually removed by an admin.')
+              .addFields(
+                { name: '👮‍♂️ Removed By', value: adminMember ? `${adminMember.user.tag}` : `<@${adminUserId}>`, inline: true },
+                { name: '📅 Removed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+              )
+              .setFooter({ text: 'Suspension manually removed by admin' });
+
+            await message.edit({ embeds: [updatedEmbed], components: [] });
+          }
+        } catch (e) {
+          // Message might have been deleted, ignore
+        }
+      }
+      suspensionEmbeds.delete(userId);
+    }
+
+    userSuspensions.delete(userId);
+    botLogs.addLog('SUSPENSION_REMOVED', `User suspension manually removed by admin ${adminUserId} for ${suspension.type}`, userId, { type: suspension.type, adminId: adminUserId });
+    return true;
+  } catch (e) {
+    console.error('Error manually removing suspension:', e);
+    return false;
   }
 }
 
@@ -1179,6 +1420,14 @@ async function saveData() {
     const userGiveawayCountData = JSON.stringify(Array.from(userGiveawayCount.entries()));
     redisClient.set('USERGIVEAWAYCOUNTSAVES', userGiveawayCountData);
 
+    // Save suspensions
+    const suspensionsData = JSON.stringify(Array.from(userSuspensions.entries()));
+    redisClient.set('SUSPENSIONSAVES', suspensionsData);
+
+    // Save suspension embeds
+    const suspensionEmbedsData = JSON.stringify(Array.from(suspensionEmbeds.entries()));
+    redisClient.set('SUSPENSIONEMBEDSSAVES', suspensionEmbedsData);
+
     // Save redirects
     const redirectsData = JSON.stringify({
       redirectChannelId,
@@ -1209,6 +1458,7 @@ async function saveData() {
             { name: '🎁 Finished Giveaways', value: `${finishedGiveaways.size} finished giveaways saved`, inline: true },
             { name: '👥 Trade Counters', value: `${userTradeCount.size} users with trade counters`, inline: true },
             { name: '🎊 Giveaway Counters', value: `${userGiveawayCount.size} users with giveaway counters`, inline: true },
+            { name: '⚠️ Suspensions', value: `${userSuspensions.size} active suspensions saved`, inline: true },
             { name: '🔧 Settings', value: `Redirects saved`, inline: true }
           )
           .setFooter({ text: 'Next automatic save in 5 minutes' });
@@ -1304,6 +1554,24 @@ async function loadData() {
       if (parsed.redirectTradeChannelId) redirectTradeChannelId = parsed.redirectTradeChannelId;
       if (parsed.redirectInventoryChannelId) redirectInventoryChannelId = parsed.redirectInventoryChannelId;
       if (parsed.redirectGiveawayChannelId) redirectGiveawayChannelId = parsed.redirectGiveawayChannelId;
+    }
+
+    // Load suspensions
+    const suspensionsData = await redisClient.get('SUSPENSIONSAVES');
+    if (suspensionsData) {
+      const parsed = JSON.parse(suspensionsData);
+      parsed.forEach(([key, value]) => {
+        userSuspensions.set(key, value);
+      });
+    }
+
+    // Load suspension embeds
+    const suspensionEmbedsData = await redisClient.get('SUSPENSIONEMBEDSSAVES');
+    if (suspensionEmbedsData) {
+      const parsed = JSON.parse(suspensionEmbedsData);
+      parsed.forEach(([key, value]) => {
+        suspensionEmbeds.set(key, value);
+      });
     }
 
     console.log('Data loaded from Redis successfully');
@@ -3810,6 +4078,29 @@ client.on('interactionCreate', async (interaction) => {
         components: [row],
         flags: MessageFlags.Ephemeral
       });
+    }
+
+    if (interaction.customId.startsWith('remove_suspension_')) {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
+
+      const targetUserId = interaction.customId.replace('remove_suspension_', '');
+      
+      const success = await manualSuspensionRemoval(interaction.guild, targetUserId, interaction.user.id);
+      
+      if (success) {
+        await interaction.reply({ 
+          content: `✅ Suspension manually removed for <@${targetUserId}> by ${interaction.user}.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+        botLogs.addLog('ADMIN_ACTION', 'Admin manually removed user suspension', interaction.user.id, { targetUserId });
+      } else {
+        await interaction.reply({ 
+          content: `❌ Failed to remove suspension for <@${targetUserId}>. User may not be suspended.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
     }
 
     if (interaction.customId === 'inventory_update_button') {
