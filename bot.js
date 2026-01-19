@@ -3223,14 +3223,15 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`trade_item_select_${category}`)
         .setPlaceholder(`Select items from ${category}`)
         .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ 
+        .addOptions(items.slice(0, 25).map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+      const displayText = items.length > 25 ? `Select items from **${category}** category (showing 25 of ${items.length}):` : `Select items from **${category}** category:`;
+      await interaction.reply({ content: displayText, components: [row], flags: 64 });
     }
 
     if (interaction.customId === 'trade_huge_subcategory_select') {
@@ -3238,11 +3239,13 @@ client.on('interactionCreate', async (interaction) => {
       const { StringSelectMenuBuilder } = require('discord.js');
       
       const items = itemCategories.huges[subcategory];
+      const maxOptions = Math.min(items.length, 25);
+      const itemsToShow = items.slice(0, maxOptions);
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`trade_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ 
+        .setMaxValues(maxOptions)
+        .addOptions(itemsToShow.map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
@@ -3325,18 +3328,21 @@ client.on('interactionCreate', async (interaction) => {
       }
       
       const items = itemCategories[category];
+      const maxOptions = Math.min(items.length, 25);
+      const itemsToShow = items.slice(0, maxOptions);
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_item_select_${messageId}_${category}`)
         .setPlaceholder(`Select items from ${category}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ 
+        .setMaxValues(maxOptions)
+        .addOptions(itemsToShow.map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${category}** category:`, components: [row], flags: 64 });
+      const displayText = items.length > 25 ? `Select items from **${category}** category (showing 25 of ${items.length}):` : `Select items from **${category}** category:`;
+      await interaction.reply({ content: displayText, components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('offer_huge_subcategory_select_')) {
@@ -3345,18 +3351,22 @@ client.on('interactionCreate', async (interaction) => {
       const { StringSelectMenuBuilder } = require('discord.js');
       
       const items = itemCategories.huges[subcategory];
+      const maxOptions = Math.min(items.length, 25);
+      const itemsToShow = items.slice(0, maxOptions);
+      
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_item_select_${messageId}_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
-        .setMaxValues(Math.min(items.length, 25))
-        .addOptions(items.map(item => ({ 
+        .setMaxValues(maxOptions)
+        .addOptions(itemsToShow.map(item => ({ 
           label: formatItemName(item), 
           value: item,
           emoji: getItemEmoji(item)
         })));
 
       const row = new ActionRowBuilder().addComponents(itemSelect);
-      await interaction.reply({ content: `Select items from **${subcategory}**:`, components: [row], flags: 64 });
+      const displayText = items.length > 25 ? `Select items from **${subcategory}** (showing ${maxOptions} of ${items.length}):` : `Select items from **${subcategory}**:`;
+      await interaction.reply({ content: displayText, components: [row], flags: 64 });
     }
 
     if (interaction.customId.startsWith('offer_item_select_')) {
@@ -4979,7 +4989,14 @@ async function getRobloxAvatarUrl(userId) {
     }
 
     if (interaction.customId === 'trade_setup_modal') {
-      const diamondsStr = interaction.fields.getTextInputValue('trade_diamonds') || '0';
+      let diamondsStr = '0';
+      try {
+        diamondsStr = interaction.fields.getTextInputValue('trade_diamonds') || '0';
+      } catch (e) {
+        // Field not found - diamonds already added as items
+        diamondsStr = '0';
+      }
+      
       const targetUsername = interaction.fields.getTextInputValue('trade_target_user') || '';
 
       let diamonds = 0;
