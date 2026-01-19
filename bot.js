@@ -74,11 +74,10 @@ const itemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElectricUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune', 'MajesticUnicorn', 'StuntUnicorn', 'AnimeUnicorn'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg', 'UnicornEgg'],
@@ -94,11 +93,10 @@ const giveawayItemCategories = {
     'Ice Cube Huges': ['HugeIceCubeGingerbreadCorgi', 'HugeRainbowIceCubeGingerbreadCorgi', 'HugeIceCubeCookieCutCat', 'HugeRainbowIceCubeCookieCutCat'],
     'Jelly Huges': ['HugeJellyDragon', 'HugeRainbowJellyDragon', 'HugeJellyKitsune', 'HugeRainbowJellyKitsune'],
     'Blazing Huges': ['HugeBlazingShark', 'HugeRainbowBlazingShark', 'HugeBlazingBat', 'HugeRainbowBlazingBat'],
-	'Unicorn Huges': ['HugeElectricUnicorn', 'HugeRainbowElectricUnicorn'],
     'Event Huges': ['HugePartyCat', 'HugeGoldenPartyCat', 'HugeRainbowPartyCat', 'HugePartyDragon', 'HugeGoldenPartyDragon', 'HugeRainbowPartyDragon', 'HugeHellRock', 'HugeGoldenHellRock', 'HugeRainbowHellRock'],
     'Christmas.1 Huges': ['HugePresentChestMimic', 'HugeRainbowPresentChestMimic', 'HugeGingerbreadAngelus', 'HugeGoldenGingerbreadAngelus', 'HugeRainbowGingerbreadAngelus', 'HugeNorthPoleWolf', 'HugeGoldenNorthPoleWolf', 'HugeRainbowNorthPoleWolf'],
     'Christmas.2 Huges': ['HugeIcyPhoenix', 'HugeGoldenIcyPhoenix', 'HugeRainbowIcyPhoenix'],
-    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic', 'HugeStormAgony', 'HugeGoldenStormAgony', 'HugeRainbowStormAgony']
+    'Map Huges': ['HugeChestMimic', 'HugeGoldenChestMimic', 'HugeRainbowChestMimic', 'HugeSorcererCat', 'HugeGoldenSorcererCat', 'HugeRainbowSorcererCat', 'HugeDominusAzureus', 'HugeGoldenDominusAzureus', 'HugeRainbowDominusAzureus','HugePropellerCat', 'HugeGoldenPropellerCat', 'HugeRainbowPropellerCat', 'HugePropellerDog', 'HugeGoldenPropellerDog', 'HugeRainbowPropellerDog', 'HugeNinjaCat', 'HugeGoldenNinjaCat', 'HugeRainbowNinjaCat', 'HugeFantasyChestMimic', 'HugeGoldenFantasyChestMimic']
   },
   exclusives: ['BlazingShark', 'BlazingGoldenShark', 'BlazingRainbowShark', 'BlazingBat', 'BlazingGoldenBat', 'BlazingRainbowBat', 'BlazingCorgi', 'BlazingGoldenCorgi', 'BlazingRainbowCorgi', 'IceCubeGingerbreadCat', 'IceCubeGoldenGingerbreadCat', 'IceCubeRainbowGingerbreadCat', 'IceCubeGingerbreadCorgi', 'IceCubeGoldenGingerbreadCorgi', 'IceCubeRainbowGingerbreadCorgi', 'IceCubeCookieCuteCat', 'IceCubeGoldenCookieCuteCat', 'IceCubeRainbowCookieCuteCat', 'SnowGlobeCat', 'SnowGlobeGoldenCat', 'SnowGlobeRainbowCat', 'SnowGlobeAxolotl', 'SnowGlobeGoldenAxolotl', 'SnowGlobeRainbowAxolotl', 'SnowGlobeHamster', 'SnowGlobeGoldenHamster', 'SnowGlobeRainbowHamster', 'JellyCat', 'JellyGoldenCat', 'JellyRainbowCat', 'JellyBunny', 'JellyGoldenBunny', 'JellyRainbowBunny', 'JellyCorgi', 'JellyGoldenCorgi', 'JellyRainbowCorgi', 'BlackHoleAxolotl', 'BlackHoleGoldenAxolotl', 'BlackHoleRainbowAxolotl', 'BlackHoleImmortuus', 'BlackHoleGoldenImmortuus', 'BlackHoleRainbowImmortuus', 'BlackHoleKitsune', 'BlackHoleGoldenKitsune', 'BlackHoleRainbowKitsune', 'MajesticUnicorn', 'StuntUnicorn', 'AnimeUnicorn'],
   eggs: ['HypeEgg', 'BlazingEgg', 'IceCubeEgg', 'SnowGlobeEgg', 'JellyEgg', 'BlackHoleEgg', 'UnicornEgg'],
@@ -175,7 +173,7 @@ const itemEmojis = {
   'HugeRainbowElectricUnicorn': '<:HugeRainbowElectricUnicorn:1462579057353822314>',
 
   // Exclusives
-  'BlazingShark': '<:BlazingShark:1462562761018970122>',
+  'BlazingShark': '<:BlazingShark:BlazingShark>',
   'BlazingBat': '<:BlazingBat:1462562765741752524>',
   'BlazingCorgi': '<:BlazingCorgi:1462562763909107906>',
   'IceCubeGingerbreadCat': '<:IceCubeGingerbreadCat:1462562784851005525>',
@@ -201,7 +199,7 @@ const itemEmojis = {
   'SnowGlobeEgg': '<:SnowGlobeEgg:1462562538792161300>',
   'JellyEgg': '<:JellyEgg:1462562751963463772>',
   'BlackHoleEgg': '<:BlackHoleEgg:1462562753431736474>',
-  'UnicornEgg': '<:UnicornEgg:1462563572180713585>',
+  'UnicornEgg': '1462563572180713585',
 
   // Gifts
   'LikeGoalLootbox': '<:LikeGoalLootbox:1462562535105495213>',
@@ -2535,7 +2533,7 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId('offer_quantities')
         .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('1,1,1,... (one per item)')
+        .setPlaceholder('1,2,3,... (one per item)')
         .setRequired(true);
 
       const row = new ActionRowBuilder().addComponents(quantitiesInput);
@@ -3111,7 +3109,9 @@ client.on('interactionCreate', async (interaction) => {
       
       const selectedItems = interaction.values;
 
-      interaction.user.selectedInventoryItems = selectedItems;
+      // Store items selection for quantity input (limit to 25)
+      const limitedItems = selectedItems.slice(0, 25);
+      interaction.user.selectedInventoryItems = limitedItems;
       interaction.user.selectedInventoryCategory = category;
       interaction.user.selectedInventorySubcategory = subcategory;
 
@@ -3119,19 +3119,16 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`inventory_item_quantities_modal`)
         .setTitle('Select Quantities');
 
-      let inputs = [];
-      selectedItems.slice(0, 5).forEach((item, index) => {
-        const input = new TextInputBuilder()
-          .setCustomId(`inv_qty_${index}`)
-          .setLabel(`${item} quantity`)
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('1')
-          .setRequired(true)
-          .setMaxLength(3);
-        inputs.push(new ActionRowBuilder().addComponents(input));
-      });
+      const quantitiesInput = new TextInputBuilder()
+        .setCustomId('inv_quantities')
+        .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('1,2,3,... (one per item)')
+        .setRequired(true);
 
-      quantityModal.addComponents(inputs);
+      const row = new ActionRowBuilder().addComponents(quantitiesInput);
+      quantityModal.addComponents(row);
+
       await interaction.showModal(quantityModal);
     }
 
@@ -3213,7 +3210,9 @@ client.on('interactionCreate', async (interaction) => {
       
       const selectedItems = interaction.values;
 
-      interaction.user.selectedGiveawayItems = selectedItems;
+      // Store items selection for quantity input (limit to 25)
+      const limitedItems = selectedItems.slice(0, 25);
+      interaction.user.selectedGiveawayItems = limitedItems;
       interaction.user.selectedGiveawayCategory = category;
       interaction.user.selectedGiveawaySubcategory = subcategory;
 
@@ -3221,19 +3220,16 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId(`giveaway_item_quantities_modal`)
         .setTitle('Select Quantities');
 
-      let inputs = [];
-      selectedItems.slice(0, 5).forEach((item, index) => {
-        const input = new TextInputBuilder()
-          .setCustomId(`gwa_qty_${index}`)
-          .setLabel(`${item} quantity`)
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('1')
-          .setRequired(true)
-          .setMaxLength(3);
-        inputs.push(new ActionRowBuilder().addComponents(input));
-      });
+      const quantitiesInput = new TextInputBuilder()
+        .setCustomId('gwa_quantities')
+        .setLabel(`Quantities for ${limitedItems.length} items (comma separated)`)
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('1,2,3,... (one per item)')
+        .setRequired(true);
 
-      quantityModal.addComponents(inputs);
+      const row = new ActionRowBuilder().addComponents(quantitiesInput);
+      quantityModal.addComponents(row);
+
       await interaction.showModal(quantityModal);
     }
   }
@@ -3508,9 +3504,15 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.user.selectedInventoryCategory;
       const subcategory = interaction.user.selectedInventorySubcategory;
 
+      // Process quantities
+      const quantitiesStr = interaction.fields.getTextInputValue('inv_quantities');
+      const quantities = quantitiesStr.split(',').map(q => parseInt(q.trim()) || 1);
+      if (quantities.length !== selectedItems.length) {
+        return interaction.reply({ content: `Please provide exactly ${selectedItems.length} quantities separated by commas.`, flags: MessageFlags.Ephemeral });
+      }
       const itemsWithQty = selectedItems.map((item, index) => {
-        const qty = parseInt(interaction.fields.getTextInputValue(`inv_qty_${index}`) || '1');
-        return { name: item, quantity: Math.max(1, qty) };
+        const qty = Math.max(1, quantities[index]);
+        return { name: item, quantity: qty };
       });
 
       if (!interaction.user.inventoryItems) {
@@ -3546,9 +3548,15 @@ client.on('interactionCreate', async (interaction) => {
       const category = interaction.user.selectedGiveawayCategory;
       const subcategory = interaction.user.selectedGiveawaySubcategory;
 
+      // Process quantities
+      const quantitiesStr = interaction.fields.getTextInputValue('gwa_quantities');
+      const quantities = quantitiesStr.split(',').map(q => parseInt(q.trim()) || 1);
+      if (quantities.length !== selectedItems.length) {
+        return interaction.reply({ content: `Please provide exactly ${selectedItems.length} quantities separated by commas.`, flags: MessageFlags.Ephemeral });
+      }
       const itemsWithQty = selectedItems.map((item, index) => {
-        const qty = parseInt(interaction.fields.getTextInputValue(`gwa_qty_${index}`) || '1');
-        return { name: item, quantity: Math.max(1, qty) };
+        const qty = Math.max(1, quantities[index]);
+        return { name: item, quantity: qty };
       });
 
       if (!interaction.user.giveawayItems) {
