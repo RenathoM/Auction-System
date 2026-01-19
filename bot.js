@@ -161,11 +161,157 @@ const ERROR_CODES = {
   'E85': 'Invalid duration. Please enter a valid time format'
 };
 
+// Bot Logs System
+const botLogs = {
+  logs: [],
+  addLog: function(type, message, userId = null, details = {}) {
+    const logEntry = {
+      id: this.logs.length + 1,
+      type,
+      message,
+      userId,
+      timestamp: new Date().toISOString(),
+      details
+    };
+    this.logs.push(logEntry);
+    // Keep only last 100 logs
+    if (this.logs.length > 100) {
+      this.logs.shift();
+    }
+    return logEntry;
+  },
+  getLogs: function(type = null, limit = 10) {
+    let filtered = this.logs;
+    if (type) {
+      filtered = filtered.filter(log => log.type === type);
+    }
+    return filtered.slice(-limit).reverse();
+  },
+  getLogDescriptions: function() {
+    return {
+      'PROOF_SUCCESS': 'Proof image successfully uploaded and added to embed thumbnail',
+      'PROOF_ERROR': 'Error occurred during proof upload process',
+      'PROOF_TIMEOUT': 'Proof upload timed out, trade/auction marked as incomplete',
+      'PROOF_REMINDER': 'Reminder sent to users about pending proof upload',
+      'TRADE_CREATED': 'New trade offer created',
+      'TRADE_ACCEPTED': 'Trade offer accepted by user',
+      'TRADE_DECLINED': 'Trade offer declined by user',
+      'TRADE_DELETED': 'Trade deleted by user or admin',
+      'AUCTION_STARTED': 'New auction started',
+      'AUCTION_ENDED': 'Auction ended with winner',
+      'AUCTION_BID': 'Bid placed on auction',
+      'AUCTION_TIMEOUT': 'Auction ended due to timeout',
+      'GIVEAWAY_STARTED': 'New giveaway started',
+      'GIVEAWAY_ENDED': 'Giveaway ended with winner',
+      'INVENTORY_CREATED': 'User inventory created or updated',
+      'ADMIN_COMMAND': 'Admin command executed',
+      'PERMISSION_DENIED': 'User attempted action without proper permissions',
+      'INVALID_INPUT': 'User provided invalid input for command',
+      'SUSPENSION_APPLIED': 'User suspended for failing to upload proof within timeout',
+      'SUSPENSION_REMOVED': 'User suspension automatically removed after duration expired',
+    };
+  }
+};
+
 // Error frequency tracker for multiple errors in short time
 const errorFrequency = new Map();
 const MULTIPLE_ERROR_THRESHOLD = 60000; // 60 seconds
 const ALERT_CHANNEL = '1461506733833846958';
 const ALERT_USER = '566300801476329472';
+
+// Suspension system constants
+const SUSPENSION_DURATION = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+const SUSPENSION_ROLES = {
+  TRADE: '1462882529810841805',
+  GIVEAWAY: '1462882439075598618',
+  AUCTION: '1462882283735351519'
+};
+
+// Suspension tracking: userId -> { type, startTime, roleId }
+const userSuspensions = new Map();
+
+// Function to apply suspension to a user
+async function applySuspension(guild, userId, type) {
+  try {
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    const roleId = SUSPENSION_ROLES[type];
+    if (!roleId) return;
+
+    // Add role
+    await member.roles.add(roleId).catch(() => null);
+
+    // Record suspension
+    userSuspensions.set(userId, {
+      type,
+      startTime: Date.now(),
+      roleId
+    });
+
+    // Schedule role removal
+    setTimeout(async () => {
+      await removeSuspension(guild, userId);
+    }, SUSPENSION_DURATION);
+
+    botLogs.addLog('SUSPENSION_APPLIED', `User suspended for ${type} proof timeout`, userId, { type, duration: SUSPENSION_DURATION });
+  } catch (e) {
+    console.error('Error applying suspension:', e);
+  }
+}
+
+// Function to remove suspension from a user
+async function removeSuspension(guild, userId) {
+  try {
+    const suspension = userSuspensions.get(userId);
+    if (!suspension) return;
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (member && suspension.roleId) {
+      await member.roles.remove(suspension.roleId).catch(() => null);
+    }
+
+    userSuspensions.delete(userId);
+    botLogs.addLog('SUSPENSION_REMOVED', `User suspension expired for ${suspension.type}`, userId, { type: suspension.type });
+  } catch (e) {
+    console.error('Error removing suspension:', e);
+  }
+}
+
+// Function to check if user is suspended for a specific activity
+function checkSuspension(userId, activityType) {
+  const suspension = userSuspensions.get(userId);
+  if (!suspension) return null;
+
+  // Check if suspension applies to this activity
+  const applicableTypes = {
+    'trade': ['TRADE'],
+    'giveaway': ['GIVEAWAY'],
+    'auction': ['AUCTION']
+  };
+
+  if (!applicableTypes[activityType]?.includes(suspension.type)) return null;
+
+  const timeRemaining = SUSPENSION_DURATION - (Date.now() - suspension.startTime);
+  if (timeRemaining <= 0) {
+    // Suspension expired, remove it
+    userSuspensions.delete(userId);
+    return null;
+  }
+
+  return {
+    type: suspension.type,
+    timeRemaining,
+    reason: `Proof timeout for ${suspension.type.toLowerCase()}`
+  };
+}
+
+// Proof upload tracking system (for timeouts)
+const proofUploadTracking = new Map(); // messageId -> { type, hostId, guestId, reminderCount, reminderTimestamp }
+
+const PROOF_UPLOAD_TIMEOUT = 540000; // 9 minutes (3 reminders every 3 minutes)
+const PROOF_REMINDER_INTERVAL = 180000; // 3 minutes between reminders
+const PROOF_MAX_REMINDERS = 3; // Maximum 3 reminders
 
 // Item count validation system
 const itemCountTracking = new Map(); // userId -> { offerTradeCount, inventoryCount, giveawayCount, tradeOfferCount, timestamp }
@@ -1314,6 +1460,18 @@ client.once('clientReady', async () => {
       name: 'botcmds',
       description: 'View all available bot commands'
     },
+    {
+      name: 'botlogs',
+      description: 'View bot logs with pagination (admin only)',
+      options: [
+        {
+          name: 'type',
+          type: ApplicationCommandOptionType.String,
+          description: 'Filter logs by type (PROOF_SUCCESS, PROOF_ERROR, PROOF_TIMEOUT, PROOF_REMINDER, etc.)',
+          required: false
+        }
+      ]
+    },
   ];
 
   await client.application.commands.set(commands);
@@ -1322,19 +1480,22 @@ client.once('clientReady', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Check if user is waiting to upload proof
-  if (message.author.waitingForProof && message.attachments.size > 0) {
-    const proofData = message.author.waitingForProof;
+  // Check if user is waiting to upload proof (regular or admin)
+  if ((message.author.waitingForProof || message.author.waitingForAdminProof) && message.attachments.size > 0) {
+    const proofData = message.author.waitingForProof || message.author.waitingForAdminProof;
     const attachment = message.attachments.first();
 
     // Verify it's an image
     if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
+      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type });
       return message.reply({ content: `⚠️ ${ERROR_CODES['E56']} | Error (E56)` });
     }
 
     const guild = message.guild;
     let proofChannel = null;
     let proofEmbed = null;
+    let originalMessageId = null;
+    const isAdminUpload = !!message.author.waitingForAdminProof;
 
     if (proofData.type === 'trade') {
       const tradeProofChannelId = '1461849745566990487';
@@ -1342,6 +1503,7 @@ client.on('messageCreate', async (message) => {
 
       if (!proofChannel) {
         delete message.author.waitingForProof;
+        botLogs.addLog('PROOF_ERROR', 'Trade proof channel not found', message.author.id);
         return message.reply({ content: `⚠️ ${ERROR_CODES['E57']} | Error (E57)` });
       }
 
@@ -1349,13 +1511,16 @@ client.on('messageCreate', async (message) => {
       const trade = trades.get(proofData.tradeMessageId);
       if (!trade) {
         delete message.author.waitingForProof;
+        botLogs.addLog('PROOF_ERROR', 'Trade not found', message.author.id, { tradeId: proofData.tradeMessageId });
         return message.reply({ content: `⚠️ ${ERROR_CODES['E58']} | Error (E58)` });
       }
+
+      originalMessageId = proofData.tradeMessageId;
 
       // Create proof embed
       proofEmbed = new EmbedBuilder()
         .setTitle('🔄 Trade Proof')
-        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || 'No description provided'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x0099ff)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by <@${message.author.id}>` })
@@ -1366,6 +1531,7 @@ client.on('messageCreate', async (message) => {
 
       if (!proofChannel) {
         delete message.author.waitingForProof;
+        botLogs.addLog('PROOF_ERROR', 'Auction proof channel not found', message.author.id);
         return message.reply({ content: `⚠️ ${ERROR_CODES['E59']} | Error (E59)` });
       }
 
@@ -1374,13 +1540,16 @@ client.on('messageCreate', async (message) => {
       
       if (!auctionData) {
         delete message.author.waitingForProof;
+        botLogs.addLog('PROOF_ERROR', 'Auction not found', message.author.id, { auctionId: proofData.auctionProofMessageId });
         return message.reply({ content: `⚠️ ${ERROR_CODES['E60']} | Error (E60)` });
       }
+
+      originalMessageId = proofData.auctionProofMessageId;
 
       // Create proof embed for auction
       proofEmbed = new EmbedBuilder()
         .setTitle('🎪 Auction Proof')
-        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || 'No description provided'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x00ff00)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.username}` })
@@ -1391,6 +1560,7 @@ client.on('messageCreate', async (message) => {
 
       if (!proofChannel) {
         delete message.author.waitingForProof;
+        botLogs.addLog('PROOF_ERROR', 'Giveaway proof channel not found', message.author.id);
         return message.reply({ content: `⚠️ ${ERROR_CODES['E61']} | Error (E61)` });
       }
 
@@ -1399,8 +1569,11 @@ client.on('messageCreate', async (message) => {
       
       if (!giveawayData) {
         delete message.author.waitingForProof;
+        botLogs.addLog('PROOF_ERROR', 'Giveaway not found', message.author.id, { giveawayId: proofData.giveawayProofMessageId });
         return message.reply({ content: `⚠️ ${ERROR_CODES['E62']} | Error (E62)` });
       }
+
+      originalMessageId = proofData.giveawayProofMessageId;
 
       // Create proof embed for giveaway
       proofEmbed = new EmbedBuilder()
@@ -1412,14 +1585,45 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
     } else {
       delete message.author.waitingForProof;
+      botLogs.addLog('PROOF_ERROR', 'Invalid proof type', message.author.id, { type: proofData.type });
       return message.reply({ content: `⚠️ ${ERROR_CODES['E63']} | Error (E63)` });
     }
 
     // Send to proof channel
     await proofChannel.send({ embeds: [proofEmbed] });
     
-    message.reply('✅ Proof image has been submitted and recorded!');
+    // Update the original embed with thumbnail
+    try {
+      const channel = guild.channels.cache.get(proofData.channelId || (proofData.type === 'trade' ? (trades.get(originalMessageId)?.channelId) : null));
+      if (channel && originalMessageId) {
+        const originalMessage = await channel.messages.fetch(originalMessageId).catch(() => null);
+        if (originalMessage && originalMessage.embeds.length > 0) {
+          const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
+            .setThumbnail(attachment.url);
+          
+          await originalMessage.edit({ embeds: [updatedEmbed] });
+          botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail${isAdminUpload ? ' (admin upload)' : ''}`, message.author.id, { type: proofData.type });
+        }
+      }
+    } catch (e) {
+      console.error('Error updating original embed with thumbnail:', e);
+      botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
+    }
+
+    // Mark as proof uploaded and clear tracking for this message
+    const tracking = proofUploadTracking.get(originalMessageId);
+    if (tracking) {
+      tracking.proofUploaded = true;
+      if (tracking.timeout) clearTimeout(tracking.timeout);
+      if (tracking.reminderIntervals) {
+        tracking.reminderIntervals.forEach(id => clearInterval(id));
+      }
+    }
+    proofUploadTracking.delete(originalMessageId);
+    
+    message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
     delete message.author.waitingForProof;
+    delete message.author.waitingForAdminProof;
     return;
   }
 
@@ -1476,6 +1680,175 @@ function formatBid(num) {
     }
   }
   return num.toString();
+}
+
+// Function to start proof upload timeout
+function startProofUploadTimeout(messageId, guild, proofData) {
+  try {
+    // Clear existing timeout if any
+    if (proofUploadTracking.has(messageId)) {
+      const existing = proofUploadTracking.get(messageId);
+      if (existing.timeout) clearTimeout(existing.timeout);
+      if (existing.reminderIntervals) {
+        existing.reminderIntervals.forEach(id => clearInterval(id));
+      }
+    }
+
+    const trackingData = {
+      type: proofData.type,
+      hostId: proofData.hostId,
+      guestId: proofData.guestId,
+      reminderCount: 0,
+      reminderTimestamp: Date.now()
+    };
+
+    proofUploadTracking.set(messageId, trackingData);
+
+    // Set timeout for 3 minutes
+    const timeoutId = setTimeout(async () => {
+      try {
+        const tracking = proofUploadTracking.get(messageId);
+        if (!tracking || tracking.proofUploaded) return;
+
+        // Mark as trade not completed - change color to red and remove buttons, add admin upload button
+        let trade, channel, message;
+        
+        if (proofData.type === 'trade') {
+          trade = trades.get(messageId);
+          if (trade) {
+            channel = guild.channels.cache.get(trade.channelId);
+            if (channel) {
+              message = await channel.messages.fetch(messageId).catch(() => null);
+              if (message && message.embeds.length > 0) {
+                const adminUploadButton = new ButtonBuilder()
+                  .setCustomId(`admin_upload_proof_trade_${messageId}`)
+                  .setLabel('Admin Upload Proof')
+                  .setStyle(ButtonStyle.Danger);
+                
+                const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+                  .setColor(0xff0000)
+                  .setDescription(`**Status:** ❌ Trade Not Completed (Proof Timeout)\n\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>`);
+                
+                await message.edit({ embeds: [updatedEmbed], components: [new ActionRowBuilder().addComponents(adminUploadButton)] }).catch(() => null);
+                botLogs.addLog('PROOF_TIMEOUT', 'Trade marked as not completed due to proof timeout', null, { tradeId: messageId });
+                
+                // Apply suspensions to both users
+                await applySuspension(guild, trade.host.id, 'TRADE');
+                await applySuspension(guild, trade.acceptedUser.id, 'TRADE');
+              }
+            }
+          }
+        } else if (proofData.type === 'auction') {
+          // For auction, mark as failed and add admin upload button
+          const auctionData = finishedAuctions.get(messageId);
+          if (auctionData) {
+            channel = guild.channels.cache.get(auctionData.channelId);
+            if (channel) {
+              message = await channel.messages.fetch(messageId).catch(() => null);
+              if (message && message.embeds.length > 0) {
+                const adminUploadButton = new ButtonBuilder()
+                  .setCustomId(`admin_upload_proof_auction_${messageId}`)
+                  .setLabel('Admin Upload Proof')
+                  .setStyle(ButtonStyle.Danger);
+                
+                const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+                  .setColor(0xff0000)
+                  .setDescription(`**Status:** ❌ Auction Proof Not Submitted`);
+                
+                await message.edit({ embeds: [updatedEmbed], components: [new ActionRowBuilder().addComponents(adminUploadButton)] }).catch(() => null);
+                botLogs.addLog('PROOF_TIMEOUT', 'Auction marked as proof failed', null, { auctionId: messageId });
+                
+                // Apply suspensions to both users
+                await applySuspension(guild, auctionData.host.id, 'AUCTION');
+                const winnerId = auctionData.winner.split('<@')[1]?.split('>')[0];
+                if (winnerId) await applySuspension(guild, winnerId, 'AUCTION');
+              }
+            }
+          }
+        } else if (proofData.type === 'giveaway') {
+          // For giveaway, mark as failed and add admin upload button
+          const giveawayData = finishedGiveaways.get(messageId);
+          if (giveawayData) {
+            channel = guild.channels.cache.get(giveawayData.channelId);
+            if (channel) {
+              message = await channel.messages.fetch(messageId).catch(() => null);
+              if (message && message.embeds.length > 0) {
+                const adminUploadButton = new ButtonBuilder()
+                  .setCustomId(`admin_upload_proof_giveaway_${messageId}`)
+                  .setLabel('Admin Upload Proof')
+                  .setStyle(ButtonStyle.Danger);
+                
+                const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+                  .setColor(0xff0000)
+                  .setDescription(`**Status:** ❌ Giveaway Proof Not Submitted`);
+                
+                await message.edit({ embeds: [updatedEmbed], components: [new ActionRowBuilder().addComponents(adminUploadButton)] }).catch(() => null);
+                botLogs.addLog('PROOF_TIMEOUT', 'Giveaway marked as proof failed', null, { giveawayId: messageId });
+                
+                // Apply suspensions to both users
+                await applySuspension(guild, giveawayData.host.id, 'GIVEAWAY');
+                await applySuspension(guild, giveawayData.winner.id, 'GIVEAWAY');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error in proof timeout:', e);
+      }
+      
+      proofUploadTracking.delete(messageId);
+    }, PROOF_UPLOAD_TIMEOUT);
+
+    trackingData.timeout = timeoutId;
+
+    // Set reminders (3 times, every minute)
+    const reminderIntervals = [];
+    let reminderCount = 0;
+
+    const reminderInterval = setInterval(async () => {
+      try {
+        reminderCount++;
+        if (reminderCount > PROOF_MAX_REMINDERS) {
+          clearInterval(reminderInterval);
+          return;
+        }
+
+        const tracking = proofUploadTracking.get(messageId);
+        if (!tracking || tracking.proofUploaded) {
+          clearInterval(reminderInterval);
+          return;
+        }
+
+        const channel = guild.channels.cache.get(proofData.channelId);
+        if (channel) {
+          const timeRemaining = Math.ceil((PROOF_UPLOAD_TIMEOUT - (Date.now() - trackingData.reminderTimestamp)) / 1000);
+          const timeMinutes = Math.ceil(timeRemaining / 60);
+          
+          let message = `⏰ **Proof Upload Reminder (${reminderCount}/${PROOF_MAX_REMINDERS})**\n\n`;
+          
+          if (proofData.type === 'trade') {
+            message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your trade.\n\n`;
+          } else {
+            message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your ${proofData.type}.\n\n`;
+          }
+          
+          message += `⏱️ Time remaining: ${timeMinutes} minute${timeMinutes !== 1 ? 's' : ''}\n`;
+          message += `📸 Upload the image in this channel to complete the proof.`;
+          
+          await channel.send(message).catch(() => null);
+          botLogs.addLog('PROOF_REMINDER', `Reminder ${reminderCount}/${PROOF_MAX_REMINDERS} sent`, null, { type: proofData.type, messageId });
+        }
+      } catch (e) {
+        console.error('Error in reminder interval:', e);
+      }
+    }, PROOF_REMINDER_INTERVAL);
+
+    reminderIntervals.push(reminderInterval);
+    trackingData.reminderIntervals = reminderIntervals;
+
+  } catch (e) {
+    console.error('Error starting proof upload timeout:', e);
+  }
 }
 
 function parseDuration(str) {
@@ -2232,6 +2605,92 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({ embeds: [embed], components: [buttons] });
     }
+
+    if (commandName === 'botlogs') {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
+
+      const typeFilter = interaction.options.getString('type');
+      const logs = botLogs.getLogs(typeFilter, 100); // Get up to 100 logs
+
+      if (logs.length === 0) {
+        return interaction.reply({ content: 'No logs found.', flags: MessageFlags.Ephemeral });
+      }
+
+      const ITEMS_PER_PAGE = 10;
+      const totalPages = Math.ceil(logs.length / ITEMS_PER_PAGE);
+      const descriptions = botLogs.getLogDescriptions();
+
+      const createLogEmbed = (page) => {
+        const start = page * ITEMS_PER_PAGE;
+        const end = start + ITEMS_PER_PAGE;
+        const pageLogs = logs.slice(start, end);
+
+        const embed = new EmbedBuilder()
+          .setTitle('Bot Logs')
+          .setColor(0x3498db)
+          .setFooter({ text: `Page ${page + 1}/${totalPages} | Total Logs: ${logs.length}` })
+          .setTimestamp();
+
+        if (typeFilter) {
+          embed.setDescription(`**Filtered by type:** ${typeFilter}\n**Description:** ${descriptions[typeFilter] || 'No description available'}`);
+        }
+
+        pageLogs.forEach(log => {
+          const timestamp = new Date(log.timestamp).toLocaleString('pt-BR');
+          const userMention = log.userId ? `<@${log.userId}>` : 'System';
+          const details = log.details && Object.keys(log.details).length > 0 ? 
+            `\nDetails: ${JSON.stringify(log.details, null, 2)}` : '';
+
+          embed.addFields({
+            name: `${log.type} #${log.id}`,
+            value: `**User:** ${userMention}\n**Time:** ${timestamp}\n**Message:** ${log.message}${details}`,
+            inline: false
+          });
+        });
+
+        return embed;
+      };
+
+      const createButtons = (page) => {
+        const row = new ActionRowBuilder();
+        
+        if (page > 0) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`botlogs_prev_${page}`)
+              .setLabel('← Previous')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        row.addComponents(
+          new ButtonBuilder()
+              .setCustomId('botlogs_page')
+              .setLabel(`${page + 1}/${totalPages}`)
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(true)
+        );
+
+        if (page < totalPages - 1) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`botlogs_next_${page}`)
+              .setLabel('Next →')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        return row;
+      };
+
+      let currentPage = 0;
+      const embed = createLogEmbed(currentPage);
+      const buttons = createButtons(currentPage);
+
+      await interaction.reply({ embeds: [embed], components: buttons.length > 1 ? [buttons] : [] });
+    }
   }
 
   if (interaction.isButton()) {
@@ -2339,7 +2798,103 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // Handle botlogs pagination
+    if (interaction.customId.startsWith('botlogs_')) {
+      const typeFilter = interaction.message.embeds[0].description?.match(/Filtered by type: (\w+)/)?.[1];
+      const logs = botLogs.getLogs(typeFilter, 100);
+
+      const ITEMS_PER_PAGE = 10;
+      const totalPages = Math.ceil(logs.length / ITEMS_PER_PAGE);
+      const descriptions = botLogs.getLogDescriptions();
+
+      let currentPage = 0;
+      if (interaction.customId.includes('_prev_')) {
+        currentPage = parseInt(interaction.customId.split('_prev_')[1]) - 1;
+      } else if (interaction.customId.includes('_next_')) {
+        currentPage = parseInt(interaction.customId.split('_next_')[1]) + 1;
+      }
+
+      const createLogEmbed = (page) => {
+        const start = page * ITEMS_PER_PAGE;
+        const end = start + ITEMS_PER_PAGE;
+        const pageLogs = logs.slice(start, end);
+
+        const embed = new EmbedBuilder()
+          .setTitle('Bot Logs')
+          .setColor(0x3498db)
+          .setFooter({ text: `Page ${page + 1}/${totalPages} | Total Logs: ${logs.length}` })
+          .setTimestamp();
+
+        if (typeFilter) {
+          embed.setDescription(`**Filtered by type:** ${typeFilter}\n**Description:** ${descriptions[typeFilter] || 'No description available'}`);
+        }
+
+        pageLogs.forEach(log => {
+          const timestamp = new Date(log.timestamp).toLocaleString('pt-BR');
+          const userMention = log.userId ? `<@${log.userId}>` : 'System';
+          const details = log.details && Object.keys(log.details).length > 0 ? 
+            `\nDetails: ${JSON.stringify(log.details, null, 2)}` : '';
+
+          embed.addFields({
+            name: `${log.type} #${log.id}`,
+            value: `**User:** ${userMention}\n**Time:** ${timestamp}\n**Message:** ${log.message}${details}`,
+            inline: false
+          });
+        });
+
+        return embed;
+      };
+
+      const createButtons = (page) => {
+        const row = new ActionRowBuilder();
+        
+        if (page > 0) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`botlogs_prev_${page}`)
+              .setLabel('← Previous')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId('botlogs_page')
+            .setLabel(`${page + 1}/${totalPages}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(true)
+          );
+        
+        if (page < totalPages - 1) {
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`botlogs_next_${page}`)
+              .setLabel('Next →')
+              .setStyle(ButtonStyle.Primary)
+          );
+        }
+
+        return row;
+      };
+
+      const embed = createLogEmbed(currentPage);
+      const buttons = createButtons(currentPage);
+
+      await interaction.update({ embeds: [embed], components: buttons.length > 1 ? [buttons] : [] });
+    }
+
     if (interaction.customId === 'bid_button') {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'auction');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Auction Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot bid on auctions during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       const auction = Array.from(auctions.values()).find(a => a.channelId === interaction.channel.id);
       if (!auction) return sendErrorReply(interaction, 'E16');
 
@@ -2398,6 +2953,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId.startsWith('giveaway_enter_')) {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'giveaway');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Giveaway Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot participate in giveaways during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       const messageId = interaction.message.id;
       const giveaway = giveaways.get(messageId);
       if (!giveaway) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
@@ -2707,6 +3273,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'create_auction') {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'auction');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Auction Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot create auctions during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       const modal = new ModalBuilder()
         .setCustomId('auction_modal')
         .setTitle('Create Auction');
@@ -2745,7 +3322,52 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.showModal(modal);
     }
 
+    if (interaction.customId.startsWith('admin_upload_proof_giveaway_')) {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
+
+      const messageId = interaction.customId.replace('admin_upload_proof_giveaway_', '');
+      const giveawayData = finishedGiveaways.get(messageId);
+      if (!giveawayData) return sendErrorReply(interaction, 'E07', 'Giveaway not found');
+
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`admin_upload_proof_file_giveaway_${messageId}`)
+        .setLabel('📎 Admin Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(uploadButton);
+
+      // Store state for admin file upload
+      interaction.user.waitingForAdminProof = {
+        giveawayMessageId: messageId,
+        type: 'giveaway',
+        channelId: giveawayData.channelId,
+        hostId: giveawayData.host.id,
+        guestId: giveawayData.winner.id,
+        timestamp: Date.now()
+      };
+
+      await interaction.reply({
+        content: '📸 **Admin Upload Proof Image**\n\nAs an admin, you can upload the proof image for this giveaway. Please send your proof image (PNG or JPG) in the next message in this channel.',
+        components: [row],
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     if (interaction.customId === 'create_trade') {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'trade');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Trade Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot create trades during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       // Check trade limit
       const specialRoleId = '1461534174589485197';
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
@@ -2808,6 +3430,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'create_giveaway') {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'giveaway');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Giveaway Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot create giveaways during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       // Check if user has the required role to create giveaway
       const giveawayCreatorRoleId = '1461798386201006324';
       const specialRoleId = '1461534174589485197';
@@ -2852,6 +3485,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'trade_offer_button') {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'trade');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Trade Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot make offers on trades during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       const trade = trades.get(interaction.message.id);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
@@ -2879,6 +3523,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId.startsWith('trade_accept_')) {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'trade');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Trade Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot accept trades during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       const messageId = interaction.customId.replace('trade_accept_', '');
       const trade = trades.get(messageId);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
@@ -2898,6 +3553,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId.startsWith('trade_decline_')) {
+      // Check suspension
+      const suspension = checkSuspension(interaction.user.id, 'trade');
+      if (suspension) {
+        const hours = Math.floor(suspension.timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor((suspension.timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+        return interaction.reply({ 
+          content: `❌ **Suspended from Trade Activities**\n\n**Reason:** ${suspension.reason}\n**Time Remaining:** ${hours}h ${minutes}m\n\nYou cannot decline trades during suspension.`, 
+          flags: MessageFlags.Ephemeral 
+        });
+      }
+
       const messageId = interaction.customId.replace('trade_decline_', '');
       const trade = trades.get(messageId);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
@@ -2959,41 +3625,79 @@ client.on('interactionCreate', async (interaction) => {
         return sendErrorReply(interaction, 'E02');
       }
 
-      // Show modal for image description
-      const modal = new ModalBuilder()
-        .setCustomId(`proof_image_modal_trade_${messageId}`)
-        .setTitle('Upload Proof Image');
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_file_trade_${messageId}`)
+        .setLabel('📎 Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Primary);
 
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('proof_description')
-        .setLabel('Description (optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Add any notes about this trade...')
-        .setRequired(false);
+      const row = new ActionRowBuilder().addComponents(uploadButton);
 
-      const row = new ActionRowBuilder().addComponents(descriptionInput);
-      modal.addComponents(row);
+      // Store state for file upload
+      interaction.user.waitingForProof = {
+        tradeMessageId: messageId,
+        type: 'trade',
+        channelId: trade.channelId,
+        hostId: trade.host.id,
+        guestId: trade.acceptedUser.id,
+        timestamp: Date.now()
+      };
 
-      await interaction.showModal(modal);
+      await interaction.reply({
+        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your trade.',
+        components: [row],
+        flags: 64
+      });
+
+      // Start timeout system
+      startProofUploadTimeout(messageId, interaction.guild, {
+        type: 'trade',
+        hostId: trade.host.id,
+        guestId: trade.acceptedUser.id,
+        channelId: trade.channelId
+      });
     }
 
     if (interaction.customId.startsWith('upload_proof_auction_')) {
-      // Show modal for image description
-      const modal = new ModalBuilder()
-        .setCustomId('proof_image_modal_auction')
-        .setTitle('Upload Proof Image');
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_file_auction`)
+        .setLabel('📎 Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Primary);
 
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('proof_description')
-        .setLabel('Description (optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Add any notes about this auction...')
-        .setRequired(false);
+      const row = new ActionRowBuilder().addComponents(uploadButton);
 
-      const row = new ActionRowBuilder().addComponents(descriptionInput);
-      modal.addComponents(row);
+      // Get auction data for tracking
+      const messageId = interaction.message?.id;
+      const auctionData = finishedAuctions.get(messageId);
+      const hostId = auctionData?.host?.id || null;
+      const winnerId = auctionData?.winner?.split('<@')[1]?.split('>')[0] || null;
 
-      await interaction.showModal(modal);
+      // Store state for file upload
+      interaction.user.waitingForProof = {
+        auctionProofMessageId: interaction.message?.id || null,
+        type: 'auction',
+        channelId: interaction.channelId,
+        hostId: hostId,
+        guestId: winnerId,
+        timestamp: Date.now()
+      };
+
+      await interaction.reply({
+        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your auction.',
+        components: [row],
+        flags: 64
+      });
+
+      // Start timeout system
+      if (messageId && hostId && winnerId) {
+        startProofUploadTimeout(messageId, interaction.guild, {
+          type: 'auction',
+          hostId: hostId,
+          guestId: winnerId,
+          channelId: interaction.channelId
+        });
+      }
     }
 
     if (interaction.customId.startsWith('upload_proof_giveaway_')) {
@@ -3007,30 +3711,105 @@ client.on('interactionCreate', async (interaction) => {
         return sendErrorReply(interaction, 'E02');
       }
 
-      // Show modal for image URL
-      const modal = new ModalBuilder()
-        .setCustomId(`proof_image_modal_giveaway_${messageId}`)
-        .setTitle('Upload Proof Image');
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_file_giveaway_${messageId}`)
+        .setLabel('📎 Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Primary);
 
-      const imageUrlInput = new TextInputBuilder()
-        .setCustomId('proof_image_url')
-        .setLabel('Image URL')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('https://imgur.com/...')
-        .setRequired(true);
+      const row = new ActionRowBuilder().addComponents(uploadButton);
 
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('proof_description')
-        .setLabel('Description (optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Add any notes about this giveaway...')
-        .setRequired(false);
+      // Store state for file upload
+      interaction.user.waitingForProof = {
+        giveawayProofMessageId: messageId,
+        type: 'giveaway',
+        channelId: giveawayData.channelId,
+        hostId: giveawayData.host.id,
+        guestId: giveawayData.winner.id,
+        timestamp: Date.now()
+      };
 
-      const row1 = new ActionRowBuilder().addComponents(imageUrlInput);
-      const row2 = new ActionRowBuilder().addComponents(descriptionInput);
-      modal.addComponents(row1, row2);
+      await interaction.reply({
+        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your giveaway.',
+        components: [row],
+        flags: 64
+      });
 
-      await interaction.showModal(modal);
+      // Start timeout system
+      startProofUploadTimeout(messageId, interaction.guild, {
+        type: 'giveaway',
+        hostId: giveawayData.host.id,
+        guestId: giveawayData.winner.id,
+        channelId: giveawayData.channelId
+      });
+    }
+
+    if (interaction.customId.startsWith('admin_upload_proof_trade_')) {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
+
+      const messageId = interaction.customId.replace('admin_upload_proof_trade_', '');
+      const trade = trades.get(messageId);
+      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`admin_upload_proof_file_trade_${messageId}`)
+        .setLabel('📎 Admin Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(uploadButton);
+
+      // Store state for admin file upload
+      interaction.user.waitingForAdminProof = {
+        tradeMessageId: messageId,
+        type: 'trade',
+        channelId: trade.channelId,
+        hostId: trade.host.id,
+        guestId: trade.acceptedUser.id,
+        timestamp: Date.now()
+      };
+
+      await interaction.reply({
+        content: '📸 **Admin Upload Proof Image**\n\nAs an admin, you can upload the proof image for this trade. Please send your proof image (PNG or JPG) in the next message in this channel.',
+        components: [row],
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (interaction.customId.startsWith('admin_upload_proof_auction_')) {
+      const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
+
+      const messageId = interaction.customId.replace('admin_upload_proof_auction_', '');
+      const auctionData = finishedAuctions.get(messageId);
+      if (!auctionData) return sendErrorReply(interaction, 'E07', 'Auction not found');
+
+      // Show instruction to upload image file
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`admin_upload_proof_file_auction_${messageId}`)
+        .setLabel('📎 Admin Upload Image (PNG/JPG)')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(uploadButton);
+
+      // Store state for admin file upload
+      interaction.user.waitingForAdminProof = {
+        auctionMessageId: messageId,
+        type: 'auction',
+        channelId: auctionData.channelId,
+        hostId: auctionData.host.id,
+        guestId: auctionData.winner.split('<@')[1]?.split('>')[0] || null,
+        timestamp: Date.now()
+      };
+
+      await interaction.reply({
+        content: '📸 **Admin Upload Proof Image**\n\nAs an admin, you can upload the proof image for this auction. Please send your proof image (PNG or JPG) in the next message in this channel.',
+        components: [row],
+        flags: MessageFlags.Ephemeral
+      });
     }
 
     if (interaction.customId === 'inventory_update_button') {
@@ -5077,6 +5856,7 @@ async function getRobloxAvatarUrl(userId) {
       };
 
       trades.set(message.id, trade);
+      botLogs.addLog('TRADE_CREATED', 'New trade offer created', interaction.user.id, { tradeId: message.id, targetUsername, diamonds, itemsCount: hostItems.length });
 
       // Increment trade count for user
       const currentCount = userTradeCount.get(interaction.user.id) || 0;
@@ -5301,6 +6081,7 @@ async function getRobloxAvatarUrl(userId) {
       auction.messageId = message.id;
       auction.channelId = targetChannel.id;
       auctions.set(targetChannel.id, auction);
+      botLogs.addLog('AUCTION_STARTED', 'New auction started', interaction.user.id, { auctionId: message.id, title, model, startingPrice, time });
 
       await interaction.reply({ content: `Auction "${title}" started in ${targetChannel}!`, flags: MessageFlags.Ephemeral });
 
@@ -5334,104 +6115,65 @@ async function getRobloxAvatarUrl(userId) {
 
     if (interaction.customId.startsWith('proof_image_modal_trade_')) {
       const messageId = interaction.customId.replace('proof_image_modal_trade_', '');
+      const imageUrl = interaction.fields.getTextInputValue('proof_image_url') || '';
       const description = interaction.fields.getTextInputValue('proof_description') || '';
       const trade = trades.get(messageId);
 
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
-      // Check if user has attachments
-      if (interaction.message && interaction.message.attachments.size > 0) {
-        // User needs to upload image via button with attachments
-        return sendErrorReply(interaction, 'E67');
+      // Validate URL
+      if (!imageUrl) {
+        return sendErrorReply(interaction, 'E68', 'Image URL is required');
       }
 
-      // For now, show instruction
-      await interaction.reply({
-        content: '📸 Please attach the proof image to your next message in this channel.\n\n**Take a screenshot of the screen where you are making the trade, send the image via any DM, go to the image page, copy the image link, and paste the image link into the input box of the "Upload Proof Image" button.**',
-        ephemeral: false
+      // Add proof image to trade
+      if (!trade.proofImages) {
+        trade.proofImages = [];
+      }
+
+      trade.proofImages.push({
+        url: imageUrl,
+        uploadedBy: interaction.user.id,
+        uploadedAt: new Date().toISOString(),
+        description: description
       });
 
-      // Store waiting state
-      interaction.user.waitingForProof = {
-        tradeMessageId: messageId,
-        description: description,
-        type: 'trade'
-      };
+      // Save trade
+      await redisClient.set(`trade_${messageId}`, JSON.stringify(trade));
+
+      await interaction.reply({
+        content: '✅ Proof image uploaded successfully!',
+        ephemeral: true
+      });
     }
 
     if (interaction.customId === 'proof_image_modal_auction') {
-      const description = interaction.fields.getTextInputValue('proof_description') || '';
-
-      // Show instruction
-      await interaction.reply({
-        content: '📸 Please attach the proof image to your next message in this channel.\n\n**Take a screenshot of the screen where you are making the trade, send the image via any DM, go to the image page, copy the image link, and paste the image link into the input box of the "Upload Proof Image" button.**',
-        ephemeral: false
-      });
-
-      // Store waiting state
-      interaction.user.waitingForProof = {
-        auctionProofMessageId: interaction.message?.id || null,
-        description: description,
-        type: 'auction'
-      };
-    }
-
-    if (interaction.customId.startsWith('proof_image_modal_giveaway_')) {
-      const messageId = interaction.customId.replace('proof_image_modal_giveaway_', '');
       const imageUrl = interaction.fields.getTextInputValue('proof_image_url') || '';
       const description = interaction.fields.getTextInputValue('proof_description') || '';
-      const giveawayData = finishedGiveaways.get(messageId);
-
-      if (!giveawayData) {
-        return sendErrorReply(interaction, 'E36', 'Giveaway not found');
-      }
 
       // Validate URL
       if (!imageUrl) {
-        return sendErrorReply(interaction, 'E68');
+        return sendErrorReply(interaction, 'E68', 'Image URL is required');
       }
 
-      try {
-        const channel = interaction.guild.channels.cache.get(giveawayData.channelId);
-        if (!channel) {
-          return sendErrorReply(interaction, 'E69');
-        }
-
-        // Fetch the original giveaway message
-        const giveawayMessage = await channel.messages.fetch(messageId);
-        if (!giveawayMessage) {
-          return sendErrorReply(interaction, 'E70');
-        }
-
-        // Update thumbnail of the giveaway embed
-        if (giveawayMessage.embeds.length > 0) {
-          const updatedEmbed = EmbedBuilder.from(giveawayMessage.embeds[0])
-            .setThumbnail(imageUrl);
-          await giveawayMessage.edit({ embeds: [updatedEmbed] });
-        }
-
-        // Send proof to records channel
-        const proofChannelId = '1462197194646880368';
-        const proofChannel = interaction.guild.channels.cache.get(proofChannelId);
-
-        if (proofChannel) {
-          const proofEmbed = new EmbedBuilder()
-            .setTitle('🎁 Giveaway Proof')
-            .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${description || 'No description provided'}`)
-            .setColor(0xFF1493)
-            .setImage(imageUrl)
-            .setFooter({ text: `Submitted by ${interaction.user.username}` })
-            .setTimestamp();
-
-          await proofChannel.send({ embeds: [proofEmbed] });
-        }
-
-        await interaction.reply({ content: '✅ Proof image has been submitted and the giveaway thumbnail updated!', flags: MessageFlags.Ephemeral });
-      } catch (error) {
-        console.error('Error processing giveaway proof:', error);
-        await sendErrorReply(interaction, 'E71', `Error: ${error.message}`);
+      // Store proof image in user's proof list
+      if (!interaction.user.auctionProofs) {
+        interaction.user.auctionProofs = [];
       }
+
+      interaction.user.auctionProofs.push({
+        url: imageUrl,
+        uploadedAt: new Date().toISOString(),
+        description: description,
+        auctionMessageId: interaction.message?.id || null
+      });
+
+      await interaction.reply({
+        content: '✅ Proof image uploaded successfully!',
+        ephemeral: true
+      });
     }
+
 
     if (interaction.customId === 'giveaway_diamonds_modal') {
       const diamondsStr = interaction.fields.getTextInputValue('giveaway_diamonds_amount');
