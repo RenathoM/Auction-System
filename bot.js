@@ -543,24 +543,231 @@ function formatItemsList(items) {
   }).join('\n');
 }
 
-// Helper function to add fields safely to embed (prevents invalid fields)
-function addFieldSafely(embed, name, value, inline = false) {
-  // Validate field
-  if (!name || name.toString().trim() === '') return false;
-  if (!value || value.toString().trim() === '') {
-    value = 'None';
+// Helper function to paginate items for trade offer (max 10 items per page to avoid embed overflow)
+function paginateTradeItems(items, page = 1, itemsPerPage = 10) {
+  if (!items || items.length === 0) {
+    return { items: [], page: 1, totalPages: 1, text: 'None' };
   }
   
-  // Ensure value is a string and limit to 1024 chars
-  value = value.toString().substring(0, 1024);
-  name = name.toString().substring(0, 256);
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const validPage = Math.max(1, Math.min(page, totalPages));
+  const start = (validPage - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  const pageItems = items.slice(start, end);
   
+  const text = pageItems.map(item => {
+    if (item.name === '💎 Diamonds') {
+      const abbreviatedValue = formatBid(item.quantity);
+      return `💎 **Diamonds** (${abbreviatedValue} 💎)`;
+    }
+    
+    const emoji = getItemEmoji(item.name) || '';
+    const formattedName = formatItemName(item.name);
+    return `${emoji} **${formattedName}** (x${item.quantity})`;
+  }).join('\n');
+  
+  return { 
+    items: pageItems, 
+    page: validPage, 
+    totalPages: totalPages,
+    text: text,
+    hasMultiplePages: totalPages > 1
+  };
+}
+
+// Helper function to add fields safely to embed (prevents invalid fields)
+// Tracking for addFieldSafely errors
+const addFieldSafelyErrors = [];
+const MAX_ERROR_LOG_SIZE = 100;
+
+// Helper function to safely add fields to embed with comprehensive error logging
+function addFieldSafely(embed, name, value, inline = false) {
+  const timestamp = Date.now();
+  const errorContext = {
+    timestamp: timestamp,
+    date: new Date(timestamp).toISOString(),
+    name: name,
+    value: value,
+    inline: inline,
+    errors: []
+  };
+
   try {
-    embed.addFields({ name, value, inline });
-    return true;
-  } catch (error) {
-    console.error('Error adding field to embed:', { name, value, error: error.message });
+    // Validate field name
+    if (!name || name.toString().trim() === '') {
+      const errorMsg = 'Field name is empty or invalid';
+      errorContext.errors.push({
+        type: 'INVALID_NAME',
+        message: errorMsg,
+        value: name
+      });
+      console.warn(`[addFieldSafely] ${errorMsg}`, { name, value });
+      return false;
+    }
+
+    // Validate field value
+    let sanitizedValue = value;
+    if (!value || value.toString().trim() === '') {
+      sanitizedValue = 'None';
+      errorContext.errors.push({
+        type: 'EMPTY_VALUE',
+        message: 'Field value was empty, using default "None"',
+        originalValue: value
+      });
+    }
+
+    // Convert to string and validate type
+    try {
+      sanitizedValue = sanitizedValue.toString();
+    } catch (typeError) {
+      errorContext.errors.push({
+        type: 'TYPE_CONVERSION_ERROR',
+        message: `Failed to convert value to string: ${typeError.message}`,
+        originalValue: value,
+        error: typeError.message
+      });
+      console.error(`[addFieldSafely] Type conversion error`, { name, value, error: typeError.message });
+      return false;
+    }
+
+    // Truncate to Discord limits
+    const originalNameLength = name.toString().length;
+    const originalValueLength = sanitizedValue.length;
+    
+    name = name.toString().substring(0, 256);
+    sanitizedValue = sanitizedValue.substring(0, 1024);
+
+    if (originalNameLength > 256 || originalValueLength > 1024) {
+      errorContext.errors.push({
+        type: 'TRUNCATED',
+        message: 'Field was truncated to Discord limits',
+        originalNameLength: originalNameLength,
+        truncatedNameLength: name.length,
+        originalValueLength: originalValueLength,
+        truncatedValueLength: sanitizedValue.length
+      });
+      console.warn(`[addFieldSafely] Field truncated to Discord limits`, {
+        name: name.substring(0, 50) + '...',
+        originalNameLen: originalNameLength,
+        originalValueLen: originalValueLength
+      });
+    }
+
+    // Try to add field
+    try {
+      embed.addFields({ name, value: sanitizedValue, inline });
+      
+      // Log if there were warnings but success
+      if (errorContext.errors.length > 0) {
+        console.log(`[addFieldSafely] Field added with warnings:`, {
+          name: name.substring(0, 50),
+          warnings: errorContext.errors.length
+        });
+      }
+      
+      return true;
+    } catch (embedError) {
+      errorContext.errors.push({
+        type: 'EMBED_ADD_FAILED',
+        message: `EmbedBuilder.addFields() failed: ${embedError.message}`,
+        error: embedError.message,
+        stack: embedError.stack
+      });
+      
+      // Log to console with full context
+      console.error(`[addFieldSafely] CRITICAL: Failed to add field to embed`, {
+        name: name.substring(0, 100),
+        value: sanitizedValue.substring(0, 100),
+        inline: inline,
+        error: embedError.message,
+        errorCode: embedError.code
+      });
+      
+      // Add to error tracking
+      addFieldSafelyErrors.push(errorContext);
+      if (addFieldSafelyErrors.length > MAX_ERROR_LOG_SIZE) {
+        addFieldSafelyErrors.shift();
+      }
+      
+      return false;
+    }
+  } catch (unexpectedError) {
+    errorContext.errors.push({
+      type: 'UNEXPECTED_ERROR',
+      message: `Unexpected error in addFieldSafely: ${unexpectedError.message}`,
+      error: unexpectedError.message,
+      stack: unexpectedError.stack
+    });
+    
+    console.error(`[addFieldSafely] UNEXPECTED ERROR`, {
+      name: String(name).substring(0, 50),
+      error: unexpectedError.message,
+      stack: unexpectedError.stack
+    });
+    
+    addFieldSafelyErrors.push(errorContext);
+    if (addFieldSafelyErrors.length > MAX_ERROR_LOG_SIZE) {
+      addFieldSafelyErrors.shift();
+    }
+    
     return false;
+  }
+}
+
+// Function to get addFieldSafely error logs
+function getAddFieldErrors() {
+  return {
+    total: addFieldSafelyErrors.length,
+    errors: addFieldSafelyErrors,
+    summary: {
+      invalidNames: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'INVALID_NAME')).length,
+      emptyValues: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'EMPTY_VALUE')).length,
+      typeErrors: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'TYPE_CONVERSION_ERROR')).length,
+      truncated: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'TRUNCATED')).length,
+      embedFailed: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'EMBED_ADD_FAILED')).length,
+      unexpected: addFieldSafelyErrors.filter(e => e.errors.some(err => err.type === 'UNEXPECTED_ERROR')).length
+    }
+  };
+}
+
+// Function to send addFieldSafely errors to Discord log channel
+async function logAddFieldSafelyErrors(client) {
+  try {
+    const errorLog = getAddFieldErrors();
+    if (errorLog.total === 0) return;
+
+    const logChannel = await client.channels.fetch(ERROR_LOG_CHANNEL).catch(() => null);
+    if (!logChannel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor('#FF6B6B')
+      .setTitle('⚠️ addFieldSafely Error Report')
+      .setDescription(`Total Errors: **${errorLog.total}**`)
+      .addFields(
+        { name: 'Invalid Names', value: `${errorLog.summary.invalidNames}`, inline: true },
+        { name: 'Empty Values', value: `${errorLog.summary.emptyValues}`, inline: true },
+        { name: 'Type Errors', value: `${errorLog.summary.typeErrors}`, inline: true },
+        { name: 'Truncated Fields', value: `${errorLog.summary.truncated}`, inline: true },
+        { name: 'Embed Add Failed', value: `${errorLog.summary.embedFailed}`, inline: true },
+        { name: 'Unexpected Errors', value: `${errorLog.summary.unexpected}`, inline: true }
+      )
+      .setFooter({ text: `Last Error: ${new Date(errorLog.errors[errorLog.errors.length - 1]?.timestamp).toISOString()}` });
+
+    // Add recent error details
+    const recentErrors = errorLog.errors.slice(-5);
+    if (recentErrors.length > 0) {
+      const errorDetails = recentErrors.map((err, idx) => 
+        `**Error ${idx + 1}**: ${err.errors.map(e => e.type).join(', ')}\n` +
+        `Name: \`${err.name.substring(0, 50)}\`\n` +
+        `Time: <t:${Math.floor(err.timestamp / 1000)}:F>`
+      ).join('\n\n');
+      
+      embed.addFields({ name: 'Recent Errors (Last 5)', value: errorDetails.substring(0, 1024), inline: false });
+    }
+
+    await logChannel.send({ embeds: [embed] });
+  } catch (error) {
+    console.error('[logAddFieldSafelyErrors] Failed to log errors:', error.message);
   }
 }
 
@@ -1057,6 +1264,10 @@ client.once('clientReady', async () => {
           max_value: 100
         }
       ]
+    },
+    {
+      name: 'addfieldserrors',
+      description: 'View addFieldSafely error logs (admin only)'
     },
     {
       name: 'botcmds',
@@ -1823,6 +2034,67 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
+    if (commandName === 'addfieldserrors') {
+      if (!hasAdminRole(interaction.member)) return sendErrorReply(interaction, 'E05');
+      
+      await logAdminCommand(interaction, commandName);
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      try {
+        const errorLog = getAddFieldErrors();
+        
+        if (errorLog.total === 0) {
+          await interaction.editReply({ content: '✅ No addFieldSafely errors logged.' });
+          return;
+        }
+
+        // Create embed with error summary
+        const embed = new EmbedBuilder()
+          .setColor('#FF6B6B')
+          .setTitle('⚠️ addFieldSafely Error Report')
+          .setDescription(`Total Errors Logged: **${errorLog.total}**`)
+          .addFields(
+            { name: 'Invalid Names', value: `${errorLog.summary.invalidNames}`, inline: true },
+            { name: 'Empty Values', value: `${errorLog.summary.emptyValues}`, inline: true },
+            { name: 'Type Errors', value: `${errorLog.summary.typeErrors}`, inline: true },
+            { name: 'Truncated Fields', value: `${errorLog.summary.truncated}`, inline: true },
+            { name: 'Embed Add Failed', value: `${errorLog.summary.embedFailed}`, inline: true },
+            { name: 'Unexpected Errors', value: `${errorLog.summary.unexpected}`, inline: true }
+          );
+
+        // Add recent errors (last 3)
+        const recentErrors = errorLog.errors.slice(-3);
+        if (recentErrors.length > 0) {
+          let errorDetails = '';
+          recentErrors.forEach((err, idx) => {
+            const errorTypes = err.errors.map(e => e.type).join(', ');
+            const timestamp = new Date(err.timestamp).toLocaleString();
+            errorDetails += `**[${idx + 1}] ${errorTypes}**\n`;
+            errorDetails += `Name: \`${err.name.substring(0, 40)}\`\n`;
+            errorDetails += `Time: ${timestamp}\n`;
+            
+            err.errors.forEach(errDetail => {
+              errorDetails += `  • ${errDetail.message}\n`;
+            });
+            errorDetails += '\n';
+          });
+          
+          embed.addFields({ 
+            name: 'Recent Errors (Last 3)', 
+            value: errorDetails.substring(0, 1024) || 'No recent errors',
+            inline: false 
+          });
+        }
+
+        embed.setFooter({ text: `Max logs: ${MAX_ERROR_LOG_SIZE} | Use /addfieldserrors to refresh` });
+
+        await interaction.editReply({ embeds: [embed] });
+      } catch (error) {
+        console.error('Error in addfieldserrors command:', error);
+        await sendErrorReply(interaction, 'E50');
+      }
+    }
+
     if (commandName === 'botcmds') {
       const pages = [
         {
@@ -2158,6 +2430,76 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: `Total: ${giveaway.entries.length} ${giveaway.entries.length === 1 ? 'entry' : 'entries'}` });
 
       await interaction.reply({ embeds: [entriesEmbed], flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId.startsWith('giveaway_page_prev_') || interaction.customId.startsWith('giveaway_page_next_')) {
+      const messageId = interaction.message.id;
+      const giveaway = giveaways.get(messageId);
+      
+      if (!giveaway) {
+        await interaction.reply({ content: 'Giveaway not found.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const currentPage = giveaway.currentPage || 1;
+      const itemsPerPage = giveaway.itemsPerPage || 10;
+      const totalPages = Math.ceil(giveaway.items.length / itemsPerPage);
+      let newPage = currentPage;
+
+      if (interaction.customId.startsWith('giveaway_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('giveaway_page_next_') && currentPage < totalPages) newPage++;
+
+      giveaway.currentPage = newPage;
+
+      // Get paginated items
+      const paginationData = paginateTradeItems(giveaway.items, newPage, itemsPerPage);
+
+      // Recreate giveaway embed
+      const embed = new EmbedBuilder()
+        .setTitle('🎁 Giveaway')
+        .setDescription(giveaway.description ? `**${giveaway.description}**\n\n**Click the button below to enter the giveaway!**` : '**Click the button below to enter the giveaway!**')
+        .setColor(0xFF1493)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+      const giveawayItemsField = totalPages > 1 
+        ? `${paginationData.text}\\n\\n*Page ${newPage}/${totalPages}*`
+        : paginationData.text;
+
+      addFieldSafely(embed, 'Giveaway Items', giveawayItemsField, false);
+      addFieldSafely(embed, 'Hosted by', giveaway.host.toString(), false);
+      
+      if (giveaway.description) {
+        addFieldSafely(embed, 'Description', giveaway.description, false);
+      }
+
+      addFieldSafely(embed, 'Time Remaining', 'Calculating...', false);
+
+      // Recreate buttons
+      const enterButton = new ButtonBuilder()
+        .setCustomId(`giveaway_enter_${messageId}`)
+        .setLabel('Enter Giveaway')
+        .setStyle(ButtonStyle.Success);
+
+      const entriesButton = new ButtonBuilder()
+        .setCustomId(`giveaway_entries_${messageId}`)
+        .setLabel(`${giveaway.entries.length || 0} Entries`)
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder().addComponents(enterButton, entriesButton);
+      const components = [row];
+
+      // Add pagination buttons
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`giveaway_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`giveaway_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
     }
 
     if (interaction.customId.startsWith('giveaway_end_')) {
@@ -2673,6 +3015,78 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(categorySelect);
       await interaction.reply({ content: 'Select an item category to add to your inventory:', components: [row], flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId.startsWith('inventory_page_prev_') || interaction.customId.startsWith('inventory_page_next_')) {
+      const messageId = interaction.message.id;
+      const inventoryUserId = interaction.message.mentions.users.first()?.id || interaction.user.id;
+      const inventory = inventories.get(inventoryUserId);
+      
+      if (!inventory || !inventory.items) {
+        await interaction.reply({ content: 'Inventory not found.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const currentPage = inventory.currentPage || 1;
+      const itemsPerPage = inventory.itemsPerPage || 10;
+      const totalPages = Math.ceil(inventory.items.length / itemsPerPage);
+      let newPage = currentPage;
+
+      if (interaction.customId.startsWith('inventory_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('inventory_page_next_') && currentPage < totalPages) newPage++;
+
+      inventory.currentPage = newPage;
+      inventories.set(inventoryUserId, inventory);
+
+      // Get paginated items
+      const paginationData = paginateTradeItems(inventory.items, newPage, itemsPerPage);
+
+      // Recreate inventory embed
+      const embed = new EmbedBuilder()
+        .setTitle('🎯 Inventory')
+        .setColor(0x00b0f4);
+
+      const avatarUrl = interaction.user.displayAvatarURL({ format: 'webp', size: 1024 });
+      embed.setAuthor({ name: interaction.user.displayName || interaction.user.username, iconURL: avatarUrl });
+
+      const inventoryItemsField = totalPages > 1 
+        ? `${paginationData.text}\\n\\n*Page ${newPage}/${totalPages}*`
+        : paginationData.text;
+
+      addFieldSafely(embed,
+        `Items${inventory.diamonds > 0 ? ` + ${formatBid(inventory.diamonds)} 💎` : 'None'}`,
+        inventoryItemsField,
+        false
+      );
+
+      if (inventory.lookingFor) {
+        addFieldSafely(embed, 'Looking For', inventory.lookingFor, true);
+      }
+
+      // Update pagination buttons
+      const updateButton = new ButtonBuilder()
+        .setCustomId('inventory_update_button')
+        .setLabel('Update Inventory')
+        .setStyle(ButtonStyle.Primary);
+
+      const deleteButton = new ButtonBuilder()
+        .setCustomId('inventory_delete_button')
+        .setLabel('Delete Items')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(updateButton, deleteButton);
+      const components = [row];
+
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`inventory_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`inventory_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
     }
 
     if (interaction.customId === 'inventory_delete_button') {
@@ -4149,10 +4563,15 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // Rest of embed filling...
-  const itemsText = formatItemsText(inventoryItems);
+  // Paginate inventory items
+  const inventoryPaginationData = paginateTradeItems(inventoryItems, 1, 10);
+  const inventoryItemsField = inventoryPaginationData.totalPages > 1 
+    ? `${inventoryPaginationData.text}\n\n*Page ${inventoryPaginationData.page}/${inventoryPaginationData.totalPages}*`
+    : inventoryPaginationData.text;
+
   addFieldSafely(embed,
     `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : 'None'}`,
-    itemsText,
+    inventoryItemsField,
     false
   );
 
@@ -4176,6 +4595,16 @@ client.on('interactionCreate', async (interaction) => {
     .setStyle(ButtonStyle.Danger);
 
   const row = new ActionRowBuilder().addComponents(updateButton, deleteButton);
+  const components = [row];
+
+  // Add pagination buttons if there are multiple pages
+  if (inventoryPaginationData.hasMultiplePages) {
+    const paginationRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`inventory_page_prev_${Date.now()}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId(`inventory_page_next_${Date.now()}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(inventoryPaginationData.page === inventoryPaginationData.totalPages)
+    );
+    components.push(paginationRow);
+  }
   const targetChannel = redirectInventoryChannelId ? interaction.guild.channels.cache.get(redirectInventoryChannelId) : interaction.channel;
   
   let message;
@@ -4308,10 +4737,13 @@ async function getRobloxAvatarUrl(userId) {
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      // Format giveaway items
-      const giveawayItemsText = formatItemsText(giveawayItems);
+      // Format giveaway items with pagination
+      const giveawayPaginationData = paginateTradeItems(giveawayItems, 1, 10);
+      const giveawayItemsField = giveawayPaginationData.totalPages > 1 
+        ? `${giveawayPaginationData.text}\n\n*Page ${giveawayPaginationData.page}/${giveawayPaginationData.totalPages}*`
+        : giveawayPaginationData.text;
 
-      addFieldSafely(embed, 'Giveaway Items', giveawayItemsText, false);
+      addFieldSafely(embed, 'Giveaway Items', giveawayItemsField, false);
 
       addFieldSafely(embed, 'Hosted by', interaction.user.toString(), false);
 
@@ -4507,6 +4939,9 @@ async function getRobloxAvatarUrl(userId) {
       delete interaction.user.selectedTradeCategory;
       delete interaction.user.selectedTradeSubcategory;
 
+      // Paginate items if more than 10
+      const paginationData = paginateTradeItems(hostItems, 1, 10);
+
       // Create trade embed
       const embed = new EmbedBuilder()
         .setTitle('Trade Offer')
@@ -4515,12 +4950,14 @@ async function getRobloxAvatarUrl(userId) {
         .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
-      // Format host items with quantities
-      const hostItemsText = formatItemsText(hostItems);
+      // Format host items with pagination info
+      const hostItemsField = paginationData.totalPages > 1 
+        ? `${paginationData.text}\n\n*Page ${paginationData.page}/${paginationData.totalPages}*`
+        : paginationData.text;
       
       addFieldSafely(embed, 
         `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
-        hostItemsText,
+        hostItemsField,
         false
       );
 
@@ -4535,9 +4972,19 @@ async function getRobloxAvatarUrl(userId) {
         .setStyle(ButtonStyle.Danger);
 
       const row = new ActionRowBuilder().addComponents(offerButton, deleteButton);
+      const components = [row];
+
+      // Add pagination buttons if there are multiple pages
+      if (paginationData.hasMultiplePages) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`trade_page_prev_${Date.now()}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId(`trade_page_next_${Date.now()}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(paginationData.page === paginationData.totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       const targetChannel = redirectTradeChannelId ? interaction.guild.channels.cache.get(redirectTradeChannelId) : interaction.channel;
-      const message = await targetChannel.send({ embeds: [embed], components: [row] });
+      const message = await targetChannel.send({ embeds: [embed], components });
 
       const trade = {
         host: interaction.user,
@@ -4548,7 +4995,9 @@ async function getRobloxAvatarUrl(userId) {
         messageId: message.id,
         accepted: false,
         acceptedUser: null,
-        targetUsername: targetUsername
+        targetUsername: targetUsername,
+        currentPage: 1,
+        itemsPerPage: 10
       };
 
       trades.set(message.id, trade);
@@ -4558,6 +5007,72 @@ async function getRobloxAvatarUrl(userId) {
       userTradeCount.set(interaction.user.id, currentCount + 1);
 
       await interaction.reply({ content: `Trade offer created in ${targetChannel}! ${targetUsername ? `Awaiting response from ${targetUsername}.` : 'Open for all users.'}`, flags: 64 });
+      return;
+    }
+
+    if (interaction.customId.startsWith('trade_page_prev_') || interaction.customId.startsWith('trade_page_next_')) {
+      const messageId = interaction.message.id;
+      const trade = trades.get(messageId);
+      
+      if (!trade) {
+        await interaction.reply({ content: 'Trade not found.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const currentPage = trade.currentPage || 1;
+      const totalPages = Math.ceil(trade.hostItems.length / (trade.itemsPerPage || 10));
+      let newPage = currentPage;
+
+      if (interaction.customId.startsWith('trade_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('trade_page_next_') && currentPage < totalPages) newPage++;
+
+      trade.currentPage = newPage;
+
+      // Get paginated items
+      const paginationData = paginateTradeItems(trade.hostItems, newPage, trade.itemsPerPage);
+
+      // Update embed with new page
+      const embed = new EmbedBuilder()
+        .setTitle('Trade Offer')
+        .setDescription(`**Host:** <@${trade.host.id}>\n**Status:** Waiting for offers`)
+        .setColor(0x0099ff)
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+      // Format with pagination info
+      const hostItemsField = totalPages > 1 
+        ? `${paginationData.text}\n\n*Page ${newPage}/${totalPages}*`
+        : paginationData.text;
+
+      addFieldSafely(embed,
+        `Host Items${trade.hostDiamonds > 0 ? ` + ${formatBid(trade.hostDiamonds)} 💎` : ''}`,
+        hostItemsField,
+        false
+      );
+
+      // Update pagination buttons
+      const offerButton = new ButtonBuilder()
+        .setCustomId('trade_offer_button')
+        .setLabel('Make Offer')
+        .setStyle(ButtonStyle.Primary);
+
+      const deleteButton = new ButtonBuilder()
+        .setCustomId(`trade_delete_${interaction.message.createdTimestamp}`)
+        .setLabel('Delete')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(offerButton, deleteButton);
+      const components = [row];
+
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`trade_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`trade_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
       return;
     }
 
@@ -4917,28 +5432,41 @@ async function updateTradeEmbed(guild, trade, messageId) {
       embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** <@${trade.host.id}>`);
     }
 
-    const hostItemsText = formatItemsText(trade.hostItems);
+    // Paginate host items
+    const hostPaginationData = paginateTradeItems(trade.hostItems, 1, 10);
+    const hostItemsField = hostPaginationData.totalPages > 1 
+      ? `${hostPaginationData.text}\n\n*Page 1/${hostPaginationData.totalPages}*`
+      : hostPaginationData.text;
+
     addFieldSafely(embed,
       `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`,
-      hostItemsText,
+      hostItemsField,
       true
     );
 
     if (trade.offers.length > 0 && !trade.accepted) {
       const lastOffer = trade.offers[trade.offers.length - 1];
-      const guestItemsText = formatItemsText(lastOffer.items);
+      const guestPaginationData = paginateTradeItems(lastOffer.items, 1, 10);
+      const guestItemsField = guestPaginationData.totalPages > 1 
+        ? `${guestPaginationData.text}\n\n*Page 1/${guestPaginationData.totalPages}*`
+        : guestPaginationData.text;
+
       addFieldSafely(embed,
         `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
-        guestItemsText,
+        guestItemsField,
         true
       );
     } else if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
-        const guestItemsText = formatItemsText(acceptedOffer.items);
+        const acceptedPaginationData = paginateTradeItems(acceptedOffer.items, 1, 10);
+        const acceptedItemsField = acceptedPaginationData.totalPages > 1 
+          ? `${acceptedPaginationData.text}\n\n*Page 1/${acceptedPaginationData.totalPages}*`
+          : acceptedPaginationData.text;
+
         addFieldSafely(embed,
           `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`,
-          guestItemsText,
+          acceptedItemsField,
           true
         );
       }
