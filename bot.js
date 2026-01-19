@@ -1899,25 +1899,144 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Giveaway ended!', flags: MessageFlags.Ephemeral });
     }
 
-    if (interaction.customId === 'trade_page_prev' || interaction.customId === 'trade_page_next') {
-      const currentPage = interaction.user.currentTradePage || 1;
-      const totalPages = Math.ceil(interaction.user.tradeItems.length / 15);
+    // if (interaction.customId === 'trade_page_prev' || interaction.customId === 'trade_page_next') {
+    //   const currentPage = interaction.user.currentTradePage || 1;
+    //   const totalPages = Math.ceil(interaction.user.tradeItems.length / 15);
+    //   let newPage = currentPage;
+    //   if (interaction.customId === 'trade_page_prev' && currentPage > 1) newPage--;
+    //   if (interaction.customId === 'trade_page_next' && currentPage < totalPages) newPage++;
+    //   interaction.user.currentTradePage = newPage;
+
+    //   const ITEMS_PER_PAGE = 15;
+    //   const start = (newPage - 1) * ITEMS_PER_PAGE;
+    //   const end = start + ITEMS_PER_PAGE;
+    //   const pageItems = interaction.user.tradeItems.slice(start, end);
+    //   const itemsList = formatItemsList(pageItems);                                         //\nWhat would you like to do?
+    //   const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
+
+    //   const embed = new EmbedBuilder().setDescription(description);
+
+    //   const continueSelect = new StringSelectMenuBuilder()
+    //     .setCustomId('trade_continue_select')
+    //     .setPlaceholder('What would you like to do?')
+    //     .addOptions([
+    //       { label: '✅ Confirm and Proceed', value: 'confirm_items' },
+    //       { label: '➕ Add Another Category', value: 'add_category' },
+    //       { label: '❌ Remove Items', value: 'remove_items' }
+    //     ]);
+
+    //   const row = new ActionRowBuilder().addComponents(continueSelect);
+    //   const components = [row];
+    //   if (totalPages > 1) {
+    //     const paginationRow = new ActionRowBuilder().addComponents(
+    //       new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+    //       new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+    //     );
+    //     components.push(paginationRow);
+    //   }
+
+    //   await interaction.update({ embeds: [embed], components });
+    //   return;
+    // }
+      const currentPage = interaction.user.currentInventoryPage || 1;
+      const totalPages = Math.ceil(interaction.user.inventoryItems.length / 15);
       let newPage = currentPage;
-      if (interaction.customId === 'trade_page_prev' && currentPage > 1) newPage--;
-      if (interaction.customId === 'trade_page_next' && currentPage < totalPages) newPage++;
-      interaction.user.currentTradePage = newPage;
+      if (interaction.customId === 'inventory_page_prev' && currentPage > 1) newPage--;
+      if (interaction.customId === 'inventory_page_next' && currentPage < totalPages) newPage++;
+      interaction.user.currentInventoryPage = newPage;
 
       const ITEMS_PER_PAGE = 15;
       const start = (newPage - 1) * ITEMS_PER_PAGE;
       const end = start + ITEMS_PER_PAGE;
-      const pageItems = interaction.user.tradeItems.slice(start, end);
-      const itemsList = formatItemsList(pageItems);
-      const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n\nWhat would you like to do?`;
+      const pageItems = interaction.user.inventoryItems.slice(start, end);
+      const itemsList = formatItemsList(pageItems);                                         //\nWhat would you like to do?
+      const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
 
       const embed = new EmbedBuilder().setDescription(description);
 
       const continueSelect = new StringSelectMenuBuilder()
-        .setCustomId('trade_continue_select')
+        .setCustomId('inventory_continue_select')
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Continue to Next Step', value: 'continue_to_setup' },
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('inventory_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId('inventory_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
+    }
+
+    if (interaction.customId === 'giveaway_page_prev' || interaction.customId === 'giveaway_page_next') {
+      const currentPage = interaction.user.currentGiveawayPage || 1;
+      const totalPages = Math.ceil(interaction.user.giveawayItems.length / 15);
+      let newPage = currentPage;
+      if (interaction.customId === 'giveaway_page_prev' && currentPage > 1) newPage--;
+      if (interaction.customId === 'giveaway_page_next' && currentPage < totalPages) newPage++;
+      interaction.user.currentGiveawayPage = newPage;
+
+      const ITEMS_PER_PAGE = 15;
+      const start = (newPage - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageItems = interaction.user.giveawayItems.slice(start, end);
+      const itemsList = formatItemsList(pageItems);
+      const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
+
+      const embed = new EmbedBuilder().setDescription(description);
+
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId('giveaway_continue_select')
+        .setPlaceholder('What would you like to do?')
+        .addOptions([
+          { label: '✅ Create Giveaway', value: 'create_giveaway' },
+          { label: '➕ Add Another Category', value: 'add_category' },
+          { label: '❌ Remove Items', value: 'remove_items' }
+        ]);
+
+      const row = new ActionRowBuilder().addComponents(continueSelect);
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('giveaway_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId('giveaway_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
+
+      await interaction.update({ embeds: [embed], components });
+      return;
+    }
+
+    if (interaction.customId.startsWith('offer_page_prev_') || interaction.customId.startsWith('offer_page_next_')) {
+      const messageId = interaction.customId.split('_').pop();
+      const currentPage = interaction.user.currentOfferPage || 1;
+      const totalPages = Math.ceil(interaction.user.offerTradeItems.length / 15);
+      let newPage = currentPage;
+      if (interaction.customId.startsWith('offer_page_prev_') && currentPage > 1) newPage--;
+      if (interaction.customId.startsWith('offer_page_next_') && currentPage < totalPages) newPage++;
+      interaction.user.currentOfferPage = newPage;
+
+      const ITEMS_PER_PAGE = 15;
+      const start = (newPage - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageItems = interaction.user.offerTradeItems.slice(start, end);
+      const itemsList = formatItemsList(pageItems);
+      const description = `**Selected Items (Page ${newPage}/${totalPages}):**\n${itemsList}\n`;
+
+      const embed = new EmbedBuilder().setDescription(description);
+
+      const continueSelect = new StringSelectMenuBuilder()
+        .setCustomId(`offer_continue_select_${messageId}`)
         .setPlaceholder('What would you like to do?')
         .addOptions([
           { label: '✅ Confirm and Proceed', value: 'confirm_items' },
@@ -1929,8 +2048,8 @@ client.on('interactionCreate', async (interaction) => {
       const components = [row];
       if (totalPages > 1) {
         const paginationRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
-          new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
+          new ButtonBuilder().setCustomId(`offer_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(newPage === 1),
+          new ButtonBuilder().setCustomId(`offer_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(newPage === totalPages)
         );
         components.push(paginationRow);
       }
@@ -2340,7 +2459,6 @@ client.on('interactionCreate', async (interaction) => {
         interaction.reply({ content: `${indicesToDelete.length} item(s) deleted from your inventory!`, flags: MessageFlags.Ephemeral });
       }
     }
-  }
 
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === 'trade_category_select') {
@@ -2570,7 +2688,7 @@ client.on('interactionCreate', async (interaction) => {
         const itemSelect = new StringSelectMenuBuilder()
           .setCustomId('trade_remove_item_select')
           .setPlaceholder('Select items to remove')
-          .setMaxValues(Math.min(itemsList.length, 25))
+          .setMaxValues(1)
           .addOptions(itemsList.map((item, idx) => ({ 
             label: `${item.name} (x${item.quantity})`, 
             value: idx.toString()
@@ -2717,7 +2835,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId(`offer_remove_item_select_${messageId}`)
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
-          .setMaxValues(Math.min(25, items.length));
+          .setMaxValues(1);
 
         items.forEach((item, index) => {
           const emoji = getItemEmoji(item.name);
@@ -2860,7 +2978,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('inventory_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
-          .setMaxValues(Math.min(25, items.length));
+          .setMaxValues(1);
 
         items.forEach((item, index) => {
           const emoji = getItemEmoji(item.name);
@@ -2978,7 +3096,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('giveaway_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
-          .setMaxValues(Math.min(25, items.length));
+          .setMaxValues(1);
 
         items.forEach((item, index) => {
           const emoji = getItemEmoji(item.name);
@@ -3427,22 +3545,12 @@ client.on('interactionCreate', async (interaction) => {
       const start = (currentPage - 1) * ITEMS_PER_PAGE;
       const end = start + ITEMS_PER_PAGE;
       const pageItems = interaction.user.tradeItems.slice(start, end);
-      const itemsList = formatItemsList(pageItems);
-      const description = `**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n\nWhat would you like to do?`;
-
-      const embed = new EmbedBuilder().setDescription(description);
-      const components = [row];
-      if (totalPages > 1) {
-        const paginationRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('trade_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
-          new ButtonBuilder().setCustomId('trade_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
-        );
-        components.push(paginationRow);
-      }
+      const itemsList = formatItemsList(pageItems);                                             //\nWhat would you like to do?
+      const description = `**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n`;
 
       await interaction.reply({ 
-        embeds: [embed],
-        components, 
+        content: description,
+        components: [row], 
         flags: 64 
       });
       return;
@@ -3485,11 +3593,29 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      const itemsList = formatItemsList(interaction.user.offerTradeItems);
+      const ITEMS_PER_PAGE = 15;
+      const totalPages = Math.ceil(interaction.user.offerTradeItems.length / ITEMS_PER_PAGE);
+      interaction.user.currentOfferPage = 1;
+      const currentPage = 1;
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageItems = interaction.user.offerTradeItems.slice(start, end);
+      const itemsList = formatItemsList(pageItems);                                             //\nWhat would you like to do?
+      const description = `**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n`;
+
+      const embed = new EmbedBuilder().setDescription(description);
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`offer_page_prev_${messageId}`).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+          new ButtonBuilder().setCustomId(`offer_page_next_${messageId}`).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
+        embeds: [embed],
+        components, 
         flags: 64 
       });
       return;
@@ -3531,11 +3657,29 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      const itemsList = formatItemsList(interaction.user.inventoryItems);
+      const ITEMS_PER_PAGE = 15;
+      const totalPages = Math.ceil(interaction.user.inventoryItems.length / ITEMS_PER_PAGE);
+      interaction.user.currentInventoryPage = 1;
+      const currentPage = 1;
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageItems = interaction.user.inventoryItems.slice(start, end);
+      const itemsList = formatItemsList(pageItems);                                             //\nWhat would you like to do?
+      const description = `**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n`;
+
+      const embed = new EmbedBuilder().setDescription(description);
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('inventory_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+          new ButtonBuilder().setCustomId('inventory_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
+        embeds: [embed],
+        components, 
         flags: 64 
       });
       return;
@@ -3575,11 +3719,29 @@ client.on('interactionCreate', async (interaction) => {
 
       const row = new ActionRowBuilder().addComponents(continueSelect);
       
-      const itemsList = formatItemsList(interaction.user.giveawayItems);
+      const ITEMS_PER_PAGE = 15;
+      const totalPages = Math.ceil(interaction.user.giveawayItems.length / ITEMS_PER_PAGE);
+      interaction.user.currentGiveawayPage = 1;
+      const currentPage = 1;
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageItems = interaction.user.giveawayItems.slice(start, end);
+      const itemsList = formatItemsList(pageItems);                                             //\nWhat would you like to do?
+      const description = `**Selected Items (Page ${currentPage}/${totalPages}):**\n${itemsList}\n`;
+
+      const embed = new EmbedBuilder().setDescription(description);
+      const components = [row];
+      if (totalPages > 1) {
+        const paginationRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('giveaway_page_prev').setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 1),
+          new ButtonBuilder().setCustomId('giveaway_page_next').setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === totalPages)
+        );
+        components.push(paginationRow);
+      }
 
       await interaction.reply({ 
-        content: `**Selected Items:**\n${itemsList}\n\nWhat would you like to do?`,
-        components: [row], 
+        embeds: [embed],
+        components, 
         flags: 64 
       });
       return;
@@ -3660,19 +3822,19 @@ client.on('interactionCreate', async (interaction) => {
 
   // Rest of embed filling...
   const itemsText = formatItemsText(inventoryItems);
-  embed.addFields({ 
+  embed.addFields([{
     name: `Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : 'None'}`,
     value: itemsText,
     inline: true
-  });
+  }]);
 
-  embed.addFields({ name: 'Looking For', value: lookingFor, inline: true });
+  embed.addFields([{ name: 'Looking For', value: lookingFor, inline: true }]);
 
   const now = new Date();
   // Adjust to GMT-5 (UTC-5)
   const gmt5Time = new Date(now.getTime() - (5 * 60 * 60 * 1000));
   const timeStr = `${gmt5Time.getDate()}/${gmt5Time.getMonth() + 1}/${gmt5Time.getFullYear()} at ${gmt5Time.getHours().toString().padStart(2, '0')}:${gmt5Time.getMinutes().toString().padStart(2, '0')}`;
-  embed.addFields({ name: 'Last Edited', value: timeStr, inline: false });
+  embed.addFields([{ name: 'Last Edited', value: timeStr, inline: false }]);
 
   // Buttons and sending...
   const updateButton = new ButtonBuilder()
@@ -4036,11 +4198,13 @@ async function getRobloxAvatarUrl(userId) {
       // Format host items with quantities
       const hostItemsText = formatItemsText(hostItems);
       
-      embed.addFields({
-        name: `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
-        value: hostItemsText,
-        inline: false
-      });
+      if (hostItems.length > 0 || diamonds > 0) {
+        embed.addFields([{
+          name: `Host Items${diamonds > 0 ? ` + ${formatBid(diamonds)} 💎` : ''}`,
+          value: hostItemsText,
+          inline: false
+        }]);
+      }
 
       const offerButton = new ButtonBuilder()
         .setCustomId('trade_offer_button')
@@ -4423,29 +4587,29 @@ async function updateTradeEmbed(guild, trade, messageId) {
     }
 
     const hostItemsText = formatItemsText(trade.hostItems);
-    embed.addFields({
+    embed.addFields([{
       name: `Host${trade.hostDiamonds > 0 ? ` (+ ${formatBid(trade.hostDiamonds)} 💎)` : ''}`,
       value: hostItemsText,
       inline: true
-    });
+    }]);
 
     if (trade.offers.length > 0 && !trade.accepted) {
       const lastOffer = trade.offers[trade.offers.length - 1];
       const guestItemsText = formatItemsText(lastOffer.items);
-      embed.addFields({
+      embed.addFields([{
         name: `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
         value: guestItemsText,
         inline: true
-      });
+      }]);
     } else if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
         const guestItemsText = formatItemsText(acceptedOffer.items);
-        embed.addFields({
+        embed.addFields([{
           name: `${acceptedOffer.user.displayName || acceptedOffer.user.username}${acceptedOffer.diamonds > 0 ? ` (+ ${formatBid(acceptedOffer.diamonds)} 💎)` : ''}`,
           value: guestItemsText,
           inline: true
-        });
+        }]);
       }
     }
 
