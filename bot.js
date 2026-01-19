@@ -2890,6 +2890,8 @@ client.on('interactionCreate', async (interaction) => {
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
             { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
             { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
+            { name: '/suspend [user] [category] [time]', value: 'Suspend a user from trades/giveaways/auctions (admin only)', inline: false },
+            { name: '/unsuspend [user] [category] [reason]', value: 'Remove suspension from a user (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
@@ -3076,6 +3078,8 @@ client.on('interactionCreate', async (interaction) => {
             { name: '/update', value: 'Update auction, trade, and inventory embeds (admin only)', inline: false },
             { name: '/savedata', value: 'Manually save all bot data to Redis (admin only)', inline: false },
             { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
+            { name: '/suspend [user] [category] [time]', value: 'Suspend a user from trades/giveaways/auctions (admin only)', inline: false },
+            { name: '/unsuspend [user] [category] [reason]', value: 'Remove suspension from a user (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
