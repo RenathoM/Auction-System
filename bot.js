@@ -178,7 +178,7 @@ async function logError(interaction, errorCode, errorMessage, context = {}) {
       .setTitle('⚠️ Error Report')
       .setThumbnail('https://media.discordapp.net/attachments/1461506733833846958/1462838334207557693/75e6b309-4e2b-48c6-9046-23df37b6c836.gif?ex=696fa5dd&is=696e545d&hm=00a95ab257adb2f266094f7f1eeae4f094c01d1f564402575b0897947601635b&=&width=1006&height=1006')
       .addFields(
-        { name: 'User', value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
+        { name: 'User', value: `${interaction.user.displayName} (${interaction.user.id})`, inline: true },
         { name: 'Error Code', value: `\`${errorCode}\``, inline: true },
         { name: 'Message', value: errorMessage || 'No additional info', inline: false },
         { name: 'Data', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
