@@ -1389,7 +1389,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Current Bid:** ${formatBid(currentBid)} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+          .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           const channel = interaction.guild.channels.cache.get(auction.channelId);
@@ -1798,7 +1798,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0x0099ff)
           .setDescription(`Page ${pageIndex + 1}/${pages.length} (${pages.length === 1 ? errorCodesArray.length : pageIndex === pages.length - 1 ? errorCodesArray.length - (pageIndex * itemsPerPage) : itemsPerPage} errors)`)
           .setFooter({ text: `Made By Atlas | Total Errors: ${errorCodesArray.length}` })
-          .setThumbnail('https://media.discordapp.net/attachments/1461506733833846958/1462815885806014465/75e6b309-4e2b-48c6-9046-23df37b6c836.gif?ex=696f90f4&is=696e3f74&hm=61a2feb6bb88c81231141bdd77d1be122b01aad030d4c0927904666015966d4e&=&width=1006&height=1006');
+          .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
         pageErrors.forEach((error) => {
           const fieldName = `${error.code} - ${error.category}`;
@@ -2813,7 +2813,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(page.items.map(item => ({ 
               label: formatItemName(item), 
               value: item,
-              emoji: getItemEmoji(item.name)
+              emoji: getItemEmoji(item)
             })));
           rows.push(new ActionRowBuilder().addComponents(itemSelect));
         }
@@ -2827,7 +2827,7 @@ client.on('interactionCreate', async (interaction) => {
           .addOptions(items.map(item => ({ 
             label: formatItemName(item), 
             value: item,
-            emoji: getItemEmoji(item.name)
+            emoji: getItemEmoji(item)
           })));
 
         const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -2854,7 +2854,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(page.items.map(item => ({ 
               label: formatItemName(item), 
               value: item,
-              emoji: getItemEmoji(item.name)
+              emoji: getItemEmoji(item)
             })));
           rows.push(new ActionRowBuilder().addComponents(itemSelect));
         }
@@ -2868,7 +2868,7 @@ client.on('interactionCreate', async (interaction) => {
           .addOptions(items.map(item => ({ 
             label: formatItemName(item), 
             value: item,
-            emoji: getItemEmoji(item.name)
+            emoji: getItemEmoji(item)
           })));
 
         const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -3690,7 +3690,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(page.items.map(item => ({ 
               label: formatItemName(item), 
               value: item,
-              emoji: getItemEmoji(item.name)
+              emoji: getItemEmoji(item)
             })));
           rows.push(new ActionRowBuilder().addComponents(itemSelect));
         }
@@ -3704,7 +3704,7 @@ client.on('interactionCreate', async (interaction) => {
           .addOptions(items.map(item => ({ 
             label: formatItemName(item), 
             value: item,
-            emoji: getItemEmoji(item.name)
+            emoji: getItemEmoji(item)
           })));
 
         const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -3731,7 +3731,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(page.items.map(item => ({ 
               label: formatItemName(item), 
               value: item,
-              emoji: getItemEmoji(item.name)
+              emoji: getItemEmoji(item)
             })));
           rows.push(new ActionRowBuilder().addComponents(itemSelect));
         }
@@ -3745,7 +3745,7 @@ client.on('interactionCreate', async (interaction) => {
           .addOptions(items.map(item => ({ 
             label: formatItemName(item), 
             value: item,
-            emoji: getItemEmoji(item.name)
+            emoji: getItemEmoji(item)
           })));
 
         const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -3873,7 +3873,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(page.items.map(item => ({ 
               label: formatItemName(item), 
               value: item,
-              emoji: getItemEmoji(item.name)
+              emoji: getItemEmoji(item)
             })));
           rows.push(new ActionRowBuilder().addComponents(itemSelect));
         }
@@ -3887,7 +3887,7 @@ client.on('interactionCreate', async (interaction) => {
           .addOptions(items.map(item => ({ 
             label: formatItemName(item), 
             value: item,
-            emoji: getItemEmoji(item.name)
+            emoji: getItemEmoji(item)
           })));
 
         const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -3914,7 +3914,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(page.items.map(item => ({ 
               label: formatItemName(item), 
               value: item,
-              emoji: getItemEmoji(item.name)
+              emoji: getItemEmoji(item)
             })));
           rows.push(new ActionRowBuilder().addComponents(itemSelect));
         }
@@ -3928,7 +3928,7 @@ client.on('interactionCreate', async (interaction) => {
           .addOptions(items.map(item => ({ 
             label: formatItemName(item), 
             value: item,
-            emoji: getItemEmoji(item.name)
+            emoji: getItemEmoji(item)
           })));
 
         const row = new ActionRowBuilder().addComponents(itemSelect);
@@ -5032,7 +5032,7 @@ async function getRobloxAvatarUrl(userId) {
         .setTitle(title)
         .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${formatBid(startingPrice)} 💎\n**Current Bid:** ${formatBid(startingPrice)} 💎\n**Time Remaining:** ${time}s\n**Hosted by:** ${interaction.user}`)
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -5072,7 +5072,7 @@ async function getRobloxAvatarUrl(userId) {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Current Bid:** ${formatBid(currentBid)} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+          .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           await message.edit({ embeds: [updatedEmbed], components: [row] });
@@ -5250,7 +5250,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
     const embed = new EmbedBuilder()
       .setTitle('Trade Offer')
       .setColor(trade.accepted ? 0x00ff00 : 0x0099ff)
-      .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+      .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
       .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
     if (trade.accepted) {
@@ -5389,7 +5389,7 @@ async function endAuction(channel) {
       .setTitle(auction.title)
       .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Winning Bid:** ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}\n**Winner:** ${winner.user}\n**Hosted by:** ${auction.host}`)
       .setColor(0xff0000) // Red color
-      .setFooter({ text: 'Version 1.1.0 | Made By Atlas' })
+      .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
       .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
     await message.edit({ embeds: [finalEmbed], components: [] }); // Remove buttons
