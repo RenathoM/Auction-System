@@ -4504,7 +4504,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Show category selection
-      const categorySelect = new MessageSelectMenu()
+      const categorySelect = new StringSelectMenuBuilder()
         .setCustomId('trade_category_select')
         .setPlaceholder('Select an item category')
         .addOptions([
