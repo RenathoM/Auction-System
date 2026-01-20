@@ -3596,9 +3596,12 @@ client.on('interactionCreate', async (interaction) => {
       const host = await interaction.guild.members.fetch(giveaway.host.id);
       const winnerMember = await interaction.guild.members.fetch(winner.user.id);
       const channelName = `giveaway-${giveaway.host.id}-${winner.user.id}`;
+      const createGiveawayChannel = interaction.guild.channels.cache.get('1462190673834020904');
       const giveawayChannel = await interaction.guild.channels.create({
         name: channelName,
         type: 0, // text channel
+        parent: '1462173760529633383',
+        position: createGiveawayChannel ? createGiveawayChannel.position + 1 : 0,
         permissionOverwrites: [
           {
             id: interaction.guild.id,
@@ -4050,9 +4053,12 @@ client.on('interactionCreate', async (interaction) => {
       const host = await interaction.guild.members.fetch(trade.host.id);
       const guest = await interaction.guild.members.fetch(acceptedOffer.user.id);
       const channelName = `trade-${trade.host.id}-${acceptedOffer.user.id}`;
+      const createTradeChannel = interaction.guild.channels.cache.get('1461777388927979692');
       const tradeChannel = await interaction.guild.channels.create({
         name: channelName,
         type: 0, // text channel
+        parent: '1461777463821729845',
+        position: createTradeChannel ? createTradeChannel.position + 1 : 0,
         permissionOverwrites: [
           {
             id: interaction.guild.id,
@@ -6960,9 +6966,12 @@ async function endAuction(channel) {
   const host = await channel.guild.members.fetch(auction.host.id);
   const winnerMember = await channel.guild.members.fetch(winner.user.id);
   const channelName = `auction-${auction.host.id}-${winner.user.id}`;
+  const createAuctionChannel = channel.guild.channels.cache.get('1461496756171964583');
   const auctionChannel = await channel.guild.channels.create({
     name: channelName,
     type: 0, // text channel
+    parent: '1461483410194436107',
+    position: createAuctionChannel ? createAuctionChannel.position + 1 : 0,
     permissionOverwrites: [
       {
         id: channel.guild.id,
