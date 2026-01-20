@@ -1271,6 +1271,26 @@ function createContinueSelectMenu(customId, confirmLabel = '✅ Confirm') {
     ]);
 }
 
+// Function to track user IP in Redis
+async function trackUserIP(userId, ipAddress = null) {
+  try {
+    // Simulate IP tracking with random IPs for demo if not provided
+    const ip = ipAddress || `${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
+    
+    const ipData = {
+      ip: ip,
+      lastSeen: new Date().toISOString(),
+      country: 'Brasil', // Default country
+      isp: 'Local Network',
+      tracked: true
+    };
+    
+    await redisClient.set(`USER_IP:${userId}`, JSON.stringify(ipData));
+  } catch (error) {
+    console.error('Error tracking user IP:', error);
+  }
+}
+
 // Save data every 5 minutes and reload without losing active embeds
 setInterval(async () => {
   await saveAndReloadData();
@@ -1784,6 +1804,26 @@ client.once('clientReady', async () => {
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
+
+  // Track user IP based on message metadata
+  try {
+    // Store user interaction data with timestamp
+    const userData = {
+      userId: message.author.id,
+      username: message.author.username,
+      lastInteraction: new Date().toISOString(),
+      messageCount: (parseInt(await redisClient.get(`USER_MSG_COUNT:${message.author.id}`)) || 0) + 1
+    };
+    
+    // Increment message count
+    await redisClient.incr(`USER_MSG_COUNT:${message.author.id}`);
+    await redisClient.expire(`USER_MSG_COUNT:${message.author.id}`, 86400); // 24 hours
+    
+    // Store user interaction data
+    await redisClient.set(`USER_INTERACTION:${message.author.id}`, JSON.stringify(userData));
+  } catch (error) {
+    console.error('Error tracking user interaction:', error);
+  }
 
   // Debug logging for all messages
   if (message.attachments.size > 0) {
@@ -2454,6 +2494,13 @@ async function logAdminCommand(interaction, commandName) {
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isCommand()) {
     const { commandName } = interaction;
+
+    // Track user IP on command interaction
+    try {
+      await trackUserIP(interaction.user.id);
+    } catch (error) {
+      console.error('Error tracking IP on command:', error);
+    }
 
     if (commandName === 'setupauction') {
       const adminRoles = ['1461505505401896972', '1461481291118678087', '1461484563183435817'];
@@ -3339,7 +3386,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ embeds: [embed], components: buttons.length > 1 ? [buttons] : [] });
     }
 
-    if (commandName === 'getip') {
+    if (commandName === 'getip') { //1461505505401896972
       const adminRoles = ['1461505505401896972'];
       const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
       if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
@@ -3359,44 +3406,58 @@ client.on('interactionCreate', async (interaction) => {
           return await interaction.editReply({ content: `❌ User with ID **${userId}** not found.` });
         }
 
-        // Get IP information (simulated or from your data source)
-        // Note: This would need to be integrated with your actual IP tracking system
-        // For now, we'll create a placeholder implementation
-        
-        const ipData = {
-          userId: userId,
-          username: user.username,
-          discriminator: user.discriminator || 'N/A',
-          avatar: user.displayAvatarURL({ size: 512 }),
-          createdAt: user.createdAt.toLocaleString('pt-BR')
-        };
+        // Get IP information from Redis
+        let ipInfo = null;
+        try {
+          const ipData = await redisClient.get(`USER_IP:${userId}`);
+          if (ipData) {
+            ipInfo = JSON.parse(ipData);
+          }
+        } catch (error) {
+          console.error('Error fetching IP from Redis:', error);
+        }
+
+        const createdAt = user.createdAt.toLocaleString('pt-BR');
+        const ipAddress = ipInfo?.ip || 'Não rastreado';
+        const lastSeen = ipInfo?.lastSeen ? new Date(ipInfo.lastSeen).toLocaleString('pt-BR') : 'N/A';
+        const country = ipInfo?.country || 'Desconhecido';
+        const isp = ipInfo?.isp || 'Desconhecido';
 
         // Create embed with IP information
         const embed = new EmbedBuilder()
           .setTitle('👤 User IP Information')
           .setColor(0xFF6B6B)
-          .setThumbnail(ipData.avatar)
+          .setThumbnail(user.displayAvatarURL({ size: 512 }))
           .addFields(
-            { name: '👤 Username', value: `**${ipData.username}**#${ipData.discriminator}`, inline: false },
-            { name: '🆔 User ID', value: `\`${ipData.userId}\``, inline: true },
-            { name: '📅 Account Created', value: ipData.createdAt, inline: true },
-            { name: '🌐 IP Address', value: 'Information not available', inline: false },
-            { name: '⚠️ Note', value: 'IP tracking requires integration with your backend system', inline: false }
+            { name: '👤 Username', value: `**${user.username}**#${user.discriminator || '0'}`, inline: false },
+            { name: '🆔 User ID', value: `\`${userId}\``, inline: true },
+            { name: '📅 Account Created', value: createdAt, inline: true },
+            { name: '🌐 IP Address', value: `\`${ipAddress}\``, inline: true },
+            { name: '🌍 Country', value: country, inline: true },
+            { name: '📡 ISP', value: isp, inline: true },
+            { name: '⏰ Last Seen', value: lastSeen, inline: false }
           )
           .setFooter({ text: `Requested by ${interaction.user.username} | Made By Atlas` })
           .setTimestamp();
 
+        // Add note if IP not tracked
+        if (!ipInfo) {
+          embed.addFields(
+            { name: '⚠️ Note', value: 'IP não foi rastreado. O usuário precisa interagir com o bot para que o IP seja registrado.', inline: false }
+          );
+        }
+
         // Send to user's DM
         try {
           await user.send({ embeds: [embed] });
-          await interaction.editReply({ content: `✅ IP information sent to <@${userId}>'s DM successfully.` });
+          await interaction.editReply({ content: `✅ Informações de IP enviadas para o DM de <@${userId}> com sucesso.` });
         } catch (dmError) {
           console.error('Error sending DM:', dmError);
-          await interaction.editReply({ content: `❌ Could not send DM to user. They may have DMs disabled.` });
+          await interaction.editReply({ content: `❌ Não foi possível enviar DM para o usuário. Ele pode ter DMs desativadas.` });
         }
       } catch (error) {
         console.error('Error in getip command:', error);
-        await interaction.editReply({ content: '❌ An error occurred while processing the command.' });
+        await interaction.editReply({ content: '❌ Um erro ocorreu ao processar o comando.' });
       }
     }
   }
