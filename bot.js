@@ -1978,35 +1978,50 @@ client.on('messageCreate', async (message) => {
     let fileName = 'proof.png';
     try {
       console.log('[DEBUG] Fetching image from URL...');
+      console.log('[DEBUG] Image URL:', imageUrl);
       const imageResponse = await fetch(imageUrl);
       console.log('[DEBUG] Image fetch response status:', imageResponse.status);
-      if (!imageResponse.ok) throw new Error('Failed to fetch image');
+      if (!imageResponse.ok) {
+        console.error('[ERROR] Bad response status:', imageResponse.status);
+        throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+      }
+      console.log('[DEBUG] Converting response to arrayBuffer...');
       imageBuffer = await imageResponse.arrayBuffer();
-      console.log('[DEBUG] Image buffer size:', imageBuffer.byteLength);
+      console.log('[DEBUG] ✅ arrayBuffer conversion successful');
+      console.log('[DEBUG] Image buffer size:', imageBuffer.byteLength, 'bytes');
       if (attachment && attachment.name) {
         fileName = attachment.name;
       }
+      console.log('[DEBUG] Using filename:', fileName);
     } catch (fetchError) {
-      console.error('[ERROR] Error fetching image:', fetchError);
+      console.error('[ERROR] Caught exception in fetch block:', fetchError);
+      console.error('[ERROR] Error type:', fetchError.constructor.name);
+      console.error('[ERROR] Error message:', fetchError.message);
+      console.error('[ERROR] Error stack:', fetchError.stack);
       botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
       return message.reply({ content: '⚠️ Failed to download the image. Please try uploading again.' });
     }
+    
+    console.log('[DEBUG] Creating image file object...');
     const imageFile = {
       attachment: Buffer.from(imageBuffer),
       name: fileName
     };
+    console.log('[DEBUG] Image file object created, size:', imageFile.attachment.length);
     
-    console.log('[DEBUG] Sending proof message to channel:', proofChannel?.name);
+    console.log('[DEBUG] Sending proof message to channel:', proofChannel?.name, 'ID:', proofChannel?.id);
     const proofMessage = await proofChannel.send({ 
       embeds: [proofEmbed.setImage(`attachment://${imageFile.name}`)], 
       files: [imageFile] 
     }).catch(sendError => {
       console.error('[ERROR] Error sending proof message:', sendError);
+      console.error('[ERROR] Error type:', sendError.constructor.name);
+      console.error('[ERROR] Error message:', sendError.message);
       botLogs.addLog('PROOF_ERROR', 'Failed to send proof message', message.author.id, { error: sendError.message });
       throw new Error('Failed to send proof');
     });
     
-    console.log('[DEBUG] Proof message sent, ID:', proofMessage?.id);
+    console.log('[DEBUG] ✅ Proof message sent successfully, ID:', proofMessage?.id);
     
     const newImageUrl = proofMessage.attachments.first()?.url;
     console.log('[DEBUG] New image URL from proof message:', newImageUrl?.substring(0, 50));
@@ -2079,8 +2094,11 @@ client.on('messageCreate', async (message) => {
     console.log('[DEBUG] Proof upload processing completed successfully!');
     return;
     } catch (e) {
-      console.error('[ERROR] Exception in proof upload processing:', e);
-      console.error('[ERROR] Stack:', e.stack);
+      console.error('[ERROR] ❌ EXCEPTION IN PROOF UPLOAD PROCESSING ❌');
+      console.error('[ERROR] Exception object:', e);
+      console.error('[ERROR] Exception type:', e.constructor.name);
+      console.error('[ERROR] Exception message:', e.message);
+      console.error('[ERROR] Stack trace:', e.stack);
       botLogs.addLog('PROOF_ERROR', 'Failed to process proof upload', message.author.id, { error: e.message, stack: e.stack });
       message.reply({ content: '⚠️ An error occurred while processing your proof image. Please try again.' }).catch(err => console.error('Failed to send error reply:', err));
       waitingForProofUploads.delete(message.author.id);
