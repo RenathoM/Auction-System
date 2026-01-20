@@ -1996,12 +1996,26 @@ client.on('messageCreate', async (message) => {
           throw new Error(`Failed to fetch image: ${imageResponse.status}`);
         }
         
-        console.log('[DEBUG] Converting response to ArrayBuffer...');
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        console.log('[DEBUG] ✅ ArrayBuffer conversion successful, size:', arrayBuffer.byteLength, 'bytes');
-        
-        const imageBuffer = Buffer.from(arrayBuffer);
-        console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length, 'bytes');
+        console.log('[DEBUG] Converting response to Buffer...');
+        // Try using .buffer() first if available, otherwise use arrayBuffer()
+        let imageBuffer;
+        try {
+          // Node.js fetch has a .buffer() method
+          console.log('[DEBUG] Attempting to use .buffer() method...');
+          imageBuffer = await imageResponse.buffer?.();
+          if (imageBuffer) {
+            console.log('[DEBUG] ✅ Buffer method successful, size:', imageBuffer.length, 'bytes');
+          } else {
+            throw new Error('buffer() method not available');
+          }
+        } catch (bufferError) {
+          console.log('[DEBUG] .buffer() failed, trying .arrayBuffer()...');
+          console.log('[DEBUG] Converting response to ArrayBuffer...');
+          const arrayBuffer = await imageResponse.arrayBuffer();
+          console.log('[DEBUG] ✅ ArrayBuffer conversion successful, size:', arrayBuffer.byteLength, 'bytes');
+          imageBuffer = Buffer.from(arrayBuffer);
+          console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length, 'bytes');
+        }
         
         let fileName = 'proof.png';
         if (attachment && attachment.name) {
