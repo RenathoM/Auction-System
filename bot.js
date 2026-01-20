@@ -1772,17 +1772,28 @@ client.on('messageCreate', async (message) => {
 
   // Check if user is waiting to upload proof (regular or admin)
   const userProofData = waitingForProofUploads.get(message.author.id);
-  if (userProofData && message.attachments.size > 0) {
-    console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'proofData:', userProofData);
+  if (userProofData && (message.attachments.size > 0 || (message.embeds.length > 0 && message.embeds[0].image))) {
+    console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'embeds:', message.embeds.length, 'proofData:', userProofData);
     try {
     const proofData = userProofData;
-    const attachment = message.attachments.first();
+    let attachment = message.attachments.first();
+    let imageUrl = attachment?.url;
+    
+    if (!attachment && message.embeds.length > 0 && message.embeds[0].image) {
+      imageUrl = message.embeds[0].image.url;
+      console.log('Using embed image:', imageUrl);
+    }
+    
+    if (!imageUrl) {
+      console.log('No image found');
+      return message.reply({ content: '⚠️ No image found. Please attach or embed an image.' });
+    }
 
     // Verify it's an image
-    const isImage = attachment.contentType && attachment.contentType.startsWith('image/') || 
-                   attachment.name && (attachment.name.toLowerCase().endsWith('.png') || attachment.name.toLowerCase().endsWith('.jpg') || attachment.name.toLowerCase().endsWith('.jpeg') || attachment.name.toLowerCase().endsWith('.gif'));
+    const isImage = !attachment ? true : (attachment.contentType && attachment.contentType.startsWith('image/') || 
+                   attachment.name && (attachment.name.toLowerCase().endsWith('.png') || attachment.name.toLowerCase().endsWith('.jpg') || attachment.name.toLowerCase().endsWith('.jpeg') || attachment.name.toLowerCase().endsWith('.gif')));
     if (!isImage) {
-      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type, contentType: attachment.contentType, name: attachment.name });
+      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type, contentType: attachment?.contentType, name: attachment?.name });
       return message.reply({ content: `⚠️ Please upload a valid image file (PNG, JPG, JPEG, GIF). | Error (E56)` });
     }
 
