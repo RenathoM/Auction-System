@@ -3,7 +3,7 @@ global.ReadableStream = ReadableStream;
 
 require('dotenv').config();
 
-const { Client, Intents, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder, userMention } = require('discord.js');
+const { Client, Intents, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, MessageSelectMenu, userMention } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
 const redis = require('redis');
@@ -4069,9 +4069,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Show category selection
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const categorySelect = new StringSelectMenuBuilder()
+      const categorySelect = new MessageSelectMenu()
         .setCustomId('trade_category_select')
         .setPlaceholder('Select an item category')
         .addOptions([
