@@ -2027,12 +2027,19 @@ client.on('messageCreate', async (message) => {
 
     // Mark as proof uploaded and clear tracking for this message
     const tracking = proofUploadTracking.get(originalMessageId);
+    console.log('[DEBUG] Attempting to get proofUploadTracking for originalMessageId:', originalMessageId);
+    console.log('[DEBUG] Current proofUploadTracking keys:', Array.from(proofUploadTracking.keys()));
+    
     if (tracking) {
+      console.log('[DEBUG] Found tracking entry, marking as proofUploaded');
       tracking.proofUploaded = true;
       if (tracking.timeout) clearTimeout(tracking.timeout);
-      if (tracking.reminderIntervals) {
-        tracking.reminderIntervals.forEach(id => clearInterval(id));
+      if (tracking.reminderTimeouts) {
+        console.log('[DEBUG] Clearing', tracking.reminderTimeouts.length, 'reminder timeouts');
+        tracking.reminderTimeouts.forEach(id => clearTimeout(id));
       }
+    } else {
+      console.warn('Warning: proofUploadTracking entry not found for:', originalMessageId, 'Available keys:', Array.from(proofUploadTracking.keys()));
     }
     proofUploadTracking.delete(originalMessageId);
     message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
@@ -2105,8 +2112,8 @@ function startProofUploadTimeout(messageId, guild, proofData) {
     if (proofUploadTracking.has(messageId)) {
       const existing = proofUploadTracking.get(messageId);
       if (existing.timeout) clearTimeout(existing.timeout);
-      if (existing.reminderIntervals) {
-        existing.reminderIntervals.forEach(id => clearInterval(id));
+      if (existing.reminderTimeouts) {
+        existing.reminderTimeouts.forEach(id => clearTimeout(id));
       }
     }
 
@@ -2119,6 +2126,7 @@ function startProofUploadTimeout(messageId, guild, proofData) {
     };
 
     proofUploadTracking.set(messageId, trackingData);
+    console.log('[DEBUG] Set proofUploadTracking for messageId:', messageId, 'trackingData:', trackingData);
 
     // Set timeout for 3 minutes
     const timeoutId = setTimeout(async () => {
@@ -2218,7 +2226,7 @@ function startProofUploadTimeout(messageId, guild, proofData) {
     trackingData.timeout = timeoutId;
 
     // Set reminders (3 times, one every 3 minutes: at 3min, 6min, 9min)
-    const reminderIntervals = [];
+    const reminderTimeouts = [];
     let reminderCount = 0;
     const reminderTimes = [3 * 60 * 1000, 6 * 60 * 1000, 9 * 60 * 1000]; // 3, 6, 9 minutes
 
@@ -2255,10 +2263,10 @@ function startProofUploadTimeout(messageId, guild, proofData) {
         }
       }, delayTime);
       
-      reminderIntervals.push(reminderId);
+      reminderTimeouts.push(reminderId);
     });
 
-    trackingData.reminderIntervals = reminderIntervals;
+    trackingData.reminderTimeouts = reminderTimeouts;
 
   } catch (e) {
     console.error('Error starting proof upload timeout:', e);
