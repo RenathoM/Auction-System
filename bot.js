@@ -1895,6 +1895,28 @@ client.on('messageCreate', async (message) => {
       botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
     }
 
+    // Update the private channel embed with delete button
+    try {
+      const privateChannel = guild.channels.cache.get(proofData.privateChannelId);
+      if (privateChannel) {
+        // Get the first message in the private channel (the proof embed)
+        const messages = await privateChannel.messages.fetch({ limit: 1 });
+        const proofMessage = messages.first();
+        if (proofMessage && proofMessage.embeds.length > 0) {
+          const deleteButton = new ButtonBuilder()
+            .setCustomId(`delete_channel_${proofData.privateChannelId}`)
+            .setLabel('Delete Channel')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(deleteButton);
+          await proofMessage.edit({ embeds: proofMessage.embeds, components: [row] });
+        }
+      }
+    } catch (e) {
+      console.error('Error updating private channel embed with delete button:', e);
+      botLogs.addLog('PROOF_ERROR', 'Failed to add delete button to private channel', message.author.id, { error: e.message });
+    }
+
     // Mark as proof uploaded and clear tracking for this message
     const tracking = proofUploadTracking.get(originalMessageId);
     if (tracking) {
@@ -4075,8 +4097,6 @@ client.on('interactionCreate', async (interaction) => {
 
       // Update embed
       await updateTradeEmbed(interaction.guild, trade, messageId);
-      const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`✅ Trade accepted! <@${trade.host.id}> and <@${acceptedOffer.user.id}>, check your DMs for the trade channel.`);
 
       await interaction.reply({ content: 'Trade accepted!', flags: MessageFlags.Ephemeral });
       } catch (error) {
@@ -4121,8 +4141,6 @@ client.on('interactionCreate', async (interaction) => {
 
       // Update embed
       await updateTradeEmbed(interaction.guild, trade, messageId);
-      const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`❌ Trade offer from <@${declinedOffer.user.id}> has been declined.`);
 
       await interaction.reply({ content: 'Offer declined!', flags: MessageFlags.Ephemeral });
       } catch (error) {
@@ -4175,19 +4193,12 @@ client.on('interactionCreate', async (interaction) => {
         return sendErrorReply(interaction, 'E02');
       }
 
-      // Show instruction to upload image file
-      const uploadButton = new ButtonBuilder()
-        .setCustomId(`upload_proof_file_trade_${messageId}`)
-        .setLabel('📎 Upload Image (PNG/JPG)')
-        .setStyle(ButtonStyle.Primary);
-
-      const row = new ActionRowBuilder().addComponents(uploadButton);
-
       // Store state for file upload
       interaction.user.waitingForProof = {
         tradeMessageId: messageId,
         type: 'trade',
         channelId: trade.channelId,
+        privateChannelId: interaction.channelId,
         hostId: trade.host.id,
         guestId: trade.acceptedUser.id,
         timestamp: Date.now()
@@ -4195,7 +4206,6 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({
         content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your trade.',
-        components: [row],
         flags: 64
       });
 
@@ -4204,19 +4214,11 @@ client.on('interactionCreate', async (interaction) => {
         type: 'trade',
         hostId: trade.host.id,
         guestId: trade.acceptedUser.id,
-        channelId: trade.channelId
+        channelId: tradeChannel.id
       });
     }
 
     if (interaction.customId.startsWith('upload_proof_auction_')) {
-      // Show instruction to upload image file
-      const uploadButton = new ButtonBuilder()
-        .setCustomId(`upload_proof_file_auction`)
-        .setLabel('📎 Upload Image (PNG/JPG)')
-        .setStyle(ButtonStyle.Primary);
-
-      const row = new ActionRowBuilder().addComponents(uploadButton);
-
       // Get auction data for tracking
       const messageId = interaction.message?.id;
       const auctionData = finishedAuctions.get(messageId);
@@ -4227,7 +4229,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.user.waitingForProof = {
         auctionProofMessageId: interaction.message?.id || null,
         type: 'auction',
-        channelId: interaction.channelId,
+        privateChannelId: interaction.channelId,
         hostId: hostId,
         guestId: winnerId,
         timestamp: Date.now()
@@ -4235,7 +4237,6 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({
         content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your auction.',
-        components: [row],
         flags: 64
       });
 
@@ -4261,19 +4262,12 @@ client.on('interactionCreate', async (interaction) => {
         return sendErrorReply(interaction, 'E02');
       }
 
-      // Show instruction to upload image file
-      const uploadButton = new ButtonBuilder()
-        .setCustomId(`upload_proof_file_giveaway_${messageId}`)
-        .setLabel('📎 Upload Image (PNG/JPG)')
-        .setStyle(ButtonStyle.Primary);
-
-      const row = new ActionRowBuilder().addComponents(uploadButton);
-
       // Store state for file upload
       interaction.user.waitingForProof = {
         giveawayProofMessageId: messageId,
         type: 'giveaway',
         channelId: giveawayData.channelId,
+        privateChannelId: interaction.channelId,
         hostId: giveawayData.host.id,
         guestId: giveawayData.winner.id,
         timestamp: Date.now()
@@ -4281,7 +4275,6 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({
         content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your giveaway.',
-        components: [row],
         flags: 64
       });
 
@@ -4290,8 +4283,51 @@ client.on('interactionCreate', async (interaction) => {
         type: 'giveaway',
         hostId: giveawayData.host.id,
         guestId: giveawayData.winner.id,
-        channelId: giveawayData.channelId
+        channelId: giveawayChannel.id
       });
+    }
+
+    if (interaction.customId.startsWith('delete_channel_')) {
+      const channelId = interaction.customId.replace('delete_channel_', '');
+      const channel = interaction.guild.channels.cache.get(channelId);
+      if (!channel) return sendErrorReply(interaction, 'E52', 'Channel not found');
+
+      // Check if user is in the channel
+      if (!channel.members.has(interaction.user.id)) return sendErrorReply(interaction, 'E02', 'You are not authorized to delete this channel');
+
+      await interaction.deferUpdate();
+
+      let countdown = 5;
+      const updateButton = async () => {
+        const deleteButton = new ButtonBuilder()
+          .setCustomId(`delete_channel_${channelId}`)
+          .setLabel(`Delete Channel (${countdown})`)
+          .setStyle(ButtonStyle.Danger)
+          .setDisabled(true);
+
+        const row = new ActionRowBuilder().addComponents(deleteButton);
+        await interaction.message.edit({ embeds: interaction.message.embeds, components: [row] });
+      };
+
+      await updateButton();
+
+      const interval = setInterval(async () => {
+        countdown--;
+        if (countdown > 0) {
+          try {
+            await updateButton();
+          } catch (e) {
+            clearInterval(interval);
+          }
+        } else {
+          clearInterval(interval);
+          try {
+            await channel.delete();
+          } catch (e) {
+            console.error('Error deleting channel:', e);
+          }
+        }
+      }, 1000);
     }
 
     if (interaction.customId.startsWith('admin_upload_proof_trade_')) {
@@ -6863,18 +6899,12 @@ async function updateTradeEmbed(guild, trade, messageId) {
 
       components.push(new ActionRowBuilder().addComponents(viewOffersButton, deleteButton));
     } else if (trade.accepted) {
-      // Add Upload Proof Image button for accepted trades
-      const proofButton = new ButtonBuilder()
-        .setCustomId(`upload_proof_trade_${messageId}`)
-        .setLabel('Upload Proof Image')
-        .setStyle(ButtonStyle.Primary);
-
       const deleteButton = new ButtonBuilder()
         .setCustomId(`trade_delete_${Date.now()}`)
         .setLabel('Delete')
         .setStyle(ButtonStyle.Danger);
 
-      components.push(new ActionRowBuilder().addComponents(proofButton, deleteButton));
+      components.push(new ActionRowBuilder().addComponents(deleteButton));
     } else if (!trade.accepted) {
       const offerButton = new ButtonBuilder()
         .setCustomId('trade_offer_button')
