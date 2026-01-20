@@ -1878,8 +1878,20 @@ client.on('messageCreate', async (message) => {
       return message.reply({ content: `⚠️ ${ERROR_CODES['E63']} | Error (E63)` });
     }
 
-    // Send to proof channel
-    await proofChannel.send({ embeds: [proofEmbed] });
+    // Send to proof channel with image attachment
+    const imageResponse = await fetch(attachment.url);
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const imageFile = {
+      attachment: Buffer.from(imageBuffer),
+      name: attachment.name || 'proof.png'
+    };
+    
+    const proofMessage = await proofChannel.send({ 
+      embeds: [proofEmbed.setImage(`attachment://${imageFile.name}`)], 
+      files: [imageFile] 
+    });
+    
+    const newImageUrl = proofMessage.attachments.first()?.url;
     
     // Update the original embed with thumbnail
     try {
@@ -1888,7 +1900,7 @@ client.on('messageCreate', async (message) => {
         const originalMessage = await channel.messages.fetch(originalMessageId).catch(() => null);
         if (originalMessage && originalMessage.embeds.length > 0) {
           const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
-            .setThumbnail(attachment.url);
+            .setThumbnail(newImageUrl || attachment.url);
           
           await originalMessage.edit({ embeds: [updatedEmbed] });
           botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail${isAdminUpload ? ' (admin upload)' : ''}`, message.author.id, { type: proofData.type });
