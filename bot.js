@@ -5,6 +5,7 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const config = require('./config.json');
 const fs = require('fs');
 const redis = require('redis');
+const { v4: uuidv4 } = require('uuid');
 
 // Function to increment version automatically
 function incrementVersion(currentVersion) {
@@ -1999,6 +2000,8 @@ client.on('messageCreate', async (message) => {
         console.log('[DEBUG] Converting response to Buffer...');
         // Try using .buffer() first if available, otherwise use arrayBuffer()
         let imageBuffer;
+        let imageId = null;
+        let hasImageInRedis = false;
         try {
           // Node.js fetch has a .buffer() method
           console.log('[DEBUG] Attempting to use .buffer() method...');
@@ -2010,47 +2013,107 @@ client.on('messageCreate', async (message) => {
           }
         } catch (bufferError) {
           console.log('[DEBUG] .buffer() failed, trying .arrayBuffer()...');
-          console.log('[DEBUG] Converting response to ArrayBuffer...');
-          const arrayBuffer = await imageResponse.arrayBuffer();
-          console.log('[DEBUG] ✅ ArrayBuffer conversion successful, size:', arrayBuffer.byteLength, 'bytes');
-          imageBuffer = Buffer.from(arrayBuffer);
-          console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length, 'bytes');
+          try {
+            console.log('[DEBUG] Converting response to ArrayBuffer...');
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            console.log('[DEBUG] ✅ ArrayBuffer conversion successful, size:', arrayBuffer.byteLength, 'bytes');
+            imageBuffer = Buffer.from(arrayBuffer);
+            console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length, 'bytes');
+          } catch (arrayBufferError) {
+            console.warn('[WARN] Both .buffer() and .arrayBuffer() failed, will send embed only');
+            console.log('[DEBUG] ArrayBuffer error:', arrayBufferError.message);
+            imageBuffer = null;
+          }
         }
         
-        let fileName = 'proof.png';
-        if (attachment && attachment.name) {
-          fileName = attachment.name;
+        // Try to save image to Redis if we have a buffer
+        if (imageBuffer) {
+          try {
+            console.log('[DEBUG] Saving image to Redis...');
+            let fileName = 'proof.png';
+            if (attachment && attachment.name) {
+              fileName = attachment.name;
+            }
+            imageId = await saveProofImageToRedis(imageBuffer, fileName);
+            hasImageInRedis = true;
+            console.log('[DEBUG] ✅ Image saved to Redis with ID:', imageId);
+          } catch (redisError) {
+            console.error('[ERROR] Failed to save image to Redis:', redisError);
+            hasImageInRedis = false;
+          }
         }
-        console.log('[DEBUG] Using filename:', fileName);
         
-        const imageFile = {
-          attachment: imageBuffer,
-          name: fileName
-        };
+        console.log('[DEBUG] Image saved to Redis:', hasImageInRedis, 'ID:', imageId);
         
-        console.log('[DEBUG] Sending proof message to channel with image attachment...');
-        const proofMessage = await proofChannel.send({ 
-          embeds: [finalProofEmbed],
-          files: [imageFile]
-        });
-        
-        console.log('[DEBUG] ✅ Proof message sent successfully, ID:', proofMessage?.id);
-        
-        // Get the URL of the attached image from the proof message
-        const newImageUrl = proofMessage.attachments.first()?.url;
-        console.log('[DEBUG] Image URL in proof message:', newImageUrl?.substring(0, 50));
+        if (hasImageInRedis && imageId) {
+          console.log('[DEBUG] Sending proof message with Redis image reference...');
+          const redisImageUrl = `redis://proof/${imageId}`;
+          console.log('[DEBUG] Using Redis image URL:', redisImageUrl);
+          
+          const proofMessageWithRedis = await proofChannel.send({ 
+            embeds: [finalProofEmbed.setImage(redisImageUrl)]
+          });
+          
+          console.log('[DEBUG] ✅ Proof message sent with Redis reference, ID:', proofMessageWithRedis?.id);
+        } else if (imageBuffer) {
+          // Fallback: Send with Discord file attachment
+          console.log('[DEBUG] Sending proof message with Discord file attachment (Redis failed)...');
+          let fileName = 'proof.png';
+          if (attachment && attachment.name) {
+            fileName = attachment.name;
+          }
+          console.log('[DEBUG] Using filename:', fileName);
+          
+          const imageFile = {
+            attachment: imageBuffer,
+            name: fileName
+          };
+          
+          const proofMessage = await proofChannel.send({ 
+            embeds: [finalProofEmbed],
+            files: [imageFile]
+          });
+          
+          console.log('[DEBUG] ✅ Proof message sent with file attachment, ID:', proofMessage?.id);
+        } else {
+          console.log('[DEBUG] Sending proof message with embed only (no file attachment)...');
+          const proofMessage = await proofChannel.send({ 
+            embeds: [finalProofEmbed]
+          });
+          
+          console.log('[DEBUG] ✅ Proof message sent with embed only, ID:', proofMessage?.id);
+        }
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
-          console.error('[ERROR] Image download timeout (10 seconds)');
-          botLogs.addLog('PROOF_ERROR', 'Image download timeout', message.author.id, { error: 'Timeout after 10 seconds' });
+          console.error('[ERROR] Image download timeout (10 seconds), will send embed only');
+          console.log('[DEBUG] Sending proof message with embed only due to timeout...');
+          try {
+            const proofMessage = await proofChannel.send({ 
+              embeds: [finalProofEmbed]
+            });
+            console.log('[DEBUG] ✅ Proof message sent with embed only (timeout fallback), ID:', proofMessage?.id);
+          } catch (sendError) {
+            console.error('[ERROR] Failed to send proof message (fallback):', sendError);
+            botLogs.addLog('PROOF_ERROR', 'Failed to send proof message on timeout fallback', message.author.id, { error: sendError.message });
+            return message.reply({ content: '⚠️ Failed to send proof. Please try uploading again.' });
+          }
         } else {
-          console.error('[ERROR] Error fetching/converting image:', fetchError);
-          botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
+          console.error('[ERROR] Error fetching image:', fetchError);
+          console.log('[DEBUG] Attempting fallback: sending proof message with embed only...');
+          try {
+            const proofMessage = await proofChannel.send({ 
+              embeds: [finalProofEmbed]
+            });
+            console.log('[DEBUG] ✅ Proof message sent with embed only (fallback), ID:', proofMessage?.id);
+          } catch (sendError) {
+            console.error('[ERROR] Failed to send proof message (fallback):', sendError);
+            botLogs.addLog('PROOF_ERROR', 'Failed to download and send proof image', message.author.id, { error: fetchError.message, fallbackError: sendError.message });
+            return message.reply({ content: '⚠️ Failed to process proof. Please try uploading again.' });
+          }
         }
-        return message.reply({ content: '⚠️ Failed to download the image. Please try uploading again.' });
       }
     
-      // Image URL is already set in the embed
+      // Image URL for original embed thumbnail
       const newImageUrl = imageUrl;
       console.log('[DEBUG] Image URL for original embed:', newImageUrl?.substring(0, 50));
       
@@ -2183,6 +2246,47 @@ function formatBid(num) {
     }
   }
   return num.toString();
+}
+
+// Function to save proof image to Redis and return unique ID
+async function saveProofImageToRedis(imageBuffer, originalFileName) {
+  try {
+    const imageId = uuidv4();
+    const base64Image = imageBuffer.toString('base64');
+    const imageData = {
+      id: imageId,
+      fileName: originalFileName || 'proof.png',
+      size: imageBuffer.length,
+      uploadedAt: Date.now(),
+      base64: base64Image
+    };
+    
+    // Save to Redis with 30 day TTL (2592000 seconds)
+    const key = `proof:images:${imageId}`;
+    await redisClient.setEx(key, 2592000, JSON.stringify(imageData));
+    
+    console.log('[DEBUG] ✅ Image saved to Redis with ID:', imageId);
+    return imageId;
+  } catch (e) {
+    console.error('[ERROR] Failed to save image to Redis:', e);
+    throw e;
+  }
+}
+
+// Function to retrieve proof image from Redis
+async function getProofImageFromRedis(imageId) {
+  try {
+    const key = `proof:images:${imageId}`;
+    const data = await redisClient.get(key);
+    if (data) {
+      const imageData = JSON.parse(data);
+      return Buffer.from(imageData.base64, 'base64');
+    }
+    return null;
+  } catch (e) {
+    console.error('[ERROR] Failed to retrieve image from Redis:', e);
+    return null;
+  }
 }
 
 // Function to start proof upload timeout
