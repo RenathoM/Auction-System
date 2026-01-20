@@ -1771,9 +1771,11 @@ client.on('messageCreate', async (message) => {
     const attachment = message.attachments.first();
 
     // Verify it's an image
-    if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type });
-      return message.reply({ content: `⚠️ ${ERROR_CODES['E56']} | Error (E56)` });
+    const isImage = attachment.contentType && attachment.contentType.startsWith('image/') || 
+                   attachment.name && (attachment.name.toLowerCase().endsWith('.png') || attachment.name.toLowerCase().endsWith('.jpg') || attachment.name.toLowerCase().endsWith('.jpeg') || attachment.name.toLowerCase().endsWith('.gif'));
+    if (!isImage) {
+      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type, contentType: attachment.contentType, name: attachment.name });
+      return message.reply({ content: `⚠️ Please upload a valid image file (PNG, JPG, JPEG, GIF). | Error (E56)` });
     }
 
     const guild = message.guild;
@@ -1927,15 +1929,11 @@ client.on('messageCreate', async (message) => {
       }
     }
     proofUploadTracking.delete(originalMessageId);
-    
     message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
     delete message.author.waitingForProof;
     delete message.author.waitingForAdminProof;
     return;
   }
-
-  const auction = Array.from(auctions.values()).find(a => a.channelId === message.channel.id);
-  if (!auction) return;
 
   // Parse bid messages
   const bidRegex = /bid (\d+(?:,\d{3})*|\d+K?)(?:\s+and (.+))?/i;
@@ -4210,7 +4208,9 @@ client.on('interactionCreate', async (interaction) => {
         timestamp: Date.now()
       };
 
-      await interaction.reply({
+      await interaction.deferUpdate();
+
+      await interaction.followUp({
         content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your trade.',
         flags: 64
       });
@@ -4220,7 +4220,7 @@ client.on('interactionCreate', async (interaction) => {
         type: 'trade',
         hostId: trade.host.id,
         guestId: trade.acceptedUser.id,
-        channelId: tradeChannel.id
+        channelId: interaction.channelId
       });
     }
 
@@ -4241,7 +4241,9 @@ client.on('interactionCreate', async (interaction) => {
         timestamp: Date.now()
       };
 
-      await interaction.reply({
+      await interaction.deferUpdate();
+
+      await interaction.followUp({
         content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your auction.',
         flags: 64
       });
@@ -4279,7 +4281,9 @@ client.on('interactionCreate', async (interaction) => {
         timestamp: Date.now()
       };
 
-      await interaction.reply({
+      await interaction.deferUpdate();
+
+      await interaction.followUp({
         content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your giveaway.',
         flags: 64
       });
@@ -4289,7 +4293,7 @@ client.on('interactionCreate', async (interaction) => {
         type: 'giveaway',
         hostId: giveawayData.host.id,
         guestId: giveawayData.winner.id,
-        channelId: giveawayChannel.id
+        channelId: interaction.channelId
       });
     }
 
