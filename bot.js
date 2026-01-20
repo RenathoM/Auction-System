@@ -1792,7 +1792,9 @@ client.on('messageCreate', async (message) => {
     console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'embeds:', message.embeds.length, 'proofData:', userProofData, 'isPrivateChannel:', isTradePrivateChannel);
     console.log('Channel name:', message.channel?.name, 'Channel ID:', message.channel?.id);
     try {
-    let proofData = userProofData;
+      console.log('[DEBUG] Starting proof upload processing...');
+      let proofData = userProofData;
+      console.log('[DEBUG] Initial proofData:', proofData);
     
     // If no proofData but in private channel, construct it from channel info
     if (!proofData && isTradePrivateChannel) {
@@ -1806,11 +1808,16 @@ client.on('messageCreate', async (message) => {
         
         // Find the trade in the trades map
         let foundTrade = null;
+        console.log('[DEBUG] Total trades in map:', trades.size);
         for (const [msgId, trade] of trades.entries()) {
-          console.log('Checking trade:', msgId, 'host:', trade.host.id, 'accepted:', trade.acceptedUser?.id);
-          if (trade.host.id === hostId && trade.acceptedUser?.id === guestId) {
+          console.log('[DEBUG] Checking trade:', msgId, 'host type:', typeof trade.host, 'host.id:', trade.host?.id, 'hostId looking for:', hostId);
+          console.log('[DEBUG] Trade object keys:', Object.keys(trade).slice(0, 5), '...');
+          const tradeHostId = String(trade.host?.id);
+          const tradeGuestId = String(trade.acceptedUser?.id);
+          console.log('[DEBUG] Comparing:', tradeHostId, '===', hostId, '?', tradeHostId === hostId, 'AND', tradeGuestId, '===', guestId, '?', tradeGuestId === guestId);
+          if (tradeHostId === hostId && tradeGuestId === guestId) {
             foundTrade = { messageId: msgId, trade: trade };
-            console.log('Found matching trade!', msgId);
+            console.log('[DEBUG] FOUND MATCHING TRADE!', msgId);
             break;
           }
         }
@@ -1825,9 +1832,11 @@ client.on('messageCreate', async (message) => {
             privateChannelId: message.channel.id,
             description: '📦Trade Completed'
           };
-          console.log('Constructed proofData from private channel:', proofData);
+          console.log('[DEBUG] ✅ SUCCESSFULLY constructed proofData from private channel:', proofData);
         } else {
-          console.log('No trade found with this host/guest combination');
+          console.log('[DEBUG] ❌ No trade found matching this private channel');
+          console.log('[DEBUG] Looking for hostId:', hostId, 'guestId:', guestId);
+          console.log('[DEBUG] Channel name was:', message.channel.name);
         }
       } else {
         console.log('Channel name format invalid for trade detection');
@@ -1842,16 +1851,20 @@ client.on('messageCreate', async (message) => {
     let attachment = message.attachments.first();
     let imageUrl = attachment?.url;
     
+    console.log('[DEBUG] Attachment:', attachment?.name, 'URL:', imageUrl?.substring(0, 50));
+    
     if (!attachment && message.embeds.length > 0 && message.embeds[0].image) {
       imageUrl = message.embeds[0].image.url;
-      console.log('Using embed image:', imageUrl);
+      console.log('[DEBUG] Using embed image:', imageUrl?.substring(0, 50));
     }
     
     if (!imageUrl) {
-      console.log('No image found');
+      console.log('[DEBUG] No image URL found, returning error');
       return message.reply({ content: '⚠️ No image found. Please attach or embed an image.' });
     }
 
+    console.log('[DEBUG] Image URL found, verifying format...');
+    
     // Verify it's an image
     const isImage = !attachment ? true : (attachment.contentType && attachment.contentType.startsWith('image/') || 
                    attachment.name && (attachment.name.toLowerCase().endsWith('.png') || attachment.name.toLowerCase().endsWith('.jpg') || attachment.name.toLowerCase().endsWith('.jpeg') || attachment.name.toLowerCase().endsWith('.gif')));
@@ -1960,17 +1973,21 @@ client.on('messageCreate', async (message) => {
     }
 
     // Send to proof channel with image attachment
+    console.log('[DEBUG] Attempting to send proof to channel...');
     let imageBuffer;
     let fileName = 'proof.png';
     try {
+      console.log('[DEBUG] Fetching image from URL...');
       const imageResponse = await fetch(imageUrl);
+      console.log('[DEBUG] Image fetch response status:', imageResponse.status);
       if (!imageResponse.ok) throw new Error('Failed to fetch image');
       imageBuffer = await imageResponse.arrayBuffer();
+      console.log('[DEBUG] Image buffer size:', imageBuffer.byteLength);
       if (attachment && attachment.name) {
         fileName = attachment.name;
       }
     } catch (fetchError) {
-      console.error('Error fetching image:', fetchError);
+      console.error('[ERROR] Error fetching image:', fetchError);
       botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
       return message.reply({ content: '⚠️ Failed to download the image. Please try uploading again.' });
     }
@@ -1979,38 +1996,49 @@ client.on('messageCreate', async (message) => {
       name: fileName
     };
     
+    console.log('[DEBUG] Sending proof message to channel:', proofChannel?.name);
     const proofMessage = await proofChannel.send({ 
       embeds: [proofEmbed.setImage(`attachment://${imageFile.name}`)], 
       files: [imageFile] 
     }).catch(sendError => {
-      console.error('Error sending proof message:', sendError);
+      console.error('[ERROR] Error sending proof message:', sendError);
       botLogs.addLog('PROOF_ERROR', 'Failed to send proof message', message.author.id, { error: sendError.message });
       throw new Error('Failed to send proof');
     });
     
+    console.log('[DEBUG] Proof message sent, ID:', proofMessage?.id);
+    
     const newImageUrl = proofMessage.attachments.first()?.url;
+    console.log('[DEBUG] New image URL from proof message:', newImageUrl?.substring(0, 50));
     
     // Update the original embed with thumbnail
+    console.log('[DEBUG] Attempting to update original embed...');
     try {
       const channel = guild.channels.cache.get(proofData.channelId || (proofData.type === 'trade' ? (trades.get(originalMessageId)?.channelId) : null));
+      console.log('[DEBUG] Original channel:', channel?.name, channel?.id);
       if (channel && originalMessageId) {
+        console.log('[DEBUG] Fetching original message:', originalMessageId);
         const originalMessage = await channel.messages.fetch(originalMessageId).catch(() => null);
+        console.log('[DEBUG] Original message found:', !!originalMessage);
         if (originalMessage && originalMessage.embeds.length > 0) {
           const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
             .setThumbnail(newImageUrl || attachment.url);
           
           await originalMessage.edit({ embeds: [updatedEmbed] });
           botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail${isAdminUpload ? ' (admin upload)' : ''}`, message.author.id, { type: proofData.type });
+          console.log('[DEBUG] Original embed updated successfully');
         }
       }
     } catch (e) {
-      console.error('Error updating original embed with thumbnail:', e);
+      console.error('[ERROR] Error updating original embed with thumbnail:', e);
       botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
     }
 
     // Send a new message in the private channel with delete button
+    console.log('[DEBUG] Sending delete button to private channel...');
     try {
       const privateChannel = guild.channels.cache.get(proofData.privateChannelId);
+      console.log('[DEBUG] Private channel:', privateChannel?.name, privateChannel?.id);
       if (privateChannel) {
         const deleteButton = new ButtonBuilder()
           .setCustomId(`delete_channel_${proofData.privateChannelId}`)
@@ -2019,13 +2047,15 @@ client.on('messageCreate', async (message) => {
 
         const row = new ActionRowBuilder().addComponents(deleteButton);
         await privateChannel.send({ content: '✅ **Proof submitted successfully!**\n\nYou can now delete this channel.', components: [row] });
+        console.log('[DEBUG] Delete button sent successfully');
       }
     } catch (e) {
-      console.error('Error sending delete button message to private channel:', e);
+      console.error('[ERROR] Error sending delete button message to private channel:', e);
       botLogs.addLog('PROOF_ERROR', 'Failed to send delete button message to private channel', message.author.id, { error: e.message });
     }
 
     // Mark as proof uploaded and clear tracking for this message
+    console.log('[DEBUG] Marking proof as uploaded and clearing tracking...');
     const tracking = proofUploadTracking.get(originalMessageId);
     console.log('[DEBUG] Attempting to get proofUploadTracking for originalMessageId:', originalMessageId);
     console.log('[DEBUG] Current proofUploadTracking keys:', Array.from(proofUploadTracking.keys()));
@@ -2039,16 +2069,20 @@ client.on('messageCreate', async (message) => {
         tracking.reminderTimeouts.forEach(id => clearTimeout(id));
       }
     } else {
-      console.warn('Warning: proofUploadTracking entry not found for:', originalMessageId, 'Available keys:', Array.from(proofUploadTracking.keys()));
+      console.warn('[WARN] proofUploadTracking entry not found for:', originalMessageId, 'Available keys:', Array.from(proofUploadTracking.keys()));
     }
     proofUploadTracking.delete(originalMessageId);
+    console.log('[DEBUG] Sending success reply to user...');
     message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
+    console.log('[DEBUG] Deleting from waitingForProofUploads...');
     waitingForProofUploads.delete(message.author.id);
+    console.log('[DEBUG] Proof upload processing completed successfully!');
     return;
     } catch (e) {
-      console.error('Error processing proof upload:', e);
-      botLogs.addLog('PROOF_ERROR', 'Failed to process proof upload', message.author.id, { error: e.message });
-      message.reply({ content: '⚠️ An error occurred while processing your proof image. Please try again.' });
+      console.error('[ERROR] Exception in proof upload processing:', e);
+      console.error('[ERROR] Stack:', e.stack);
+      botLogs.addLog('PROOF_ERROR', 'Failed to process proof upload', message.author.id, { error: e.message, stack: e.stack });
+      message.reply({ content: '⚠️ An error occurred while processing your proof image. Please try again.' }).catch(err => console.error('Failed to send error reply:', err));
       waitingForProofUploads.delete(message.author.id);
     }
   }
