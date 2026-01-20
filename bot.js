@@ -7,7 +7,7 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const config = require('./config.json');
 const fs = require('fs');
 const redis = require('redis');
-const { v4: uuidv4 } = require('uuid');
+let uuidv4;
 
 // Function to increment version automatically
 function incrementVersion(currentVersion) {
@@ -2191,6 +2191,10 @@ function formatBid(num) {
 // Function to save proof image to Redis and return unique ID
 async function saveProofImageToRedis(imageBuffer, originalFileName) {
   try {
+    if (!uuidv4) {
+      const uuidModule = await import('uuid');
+      uuidv4 = uuidModule.v4;
+    }
     const imageId = uuidv4();
     const base64Image = imageBuffer.toString('base64');
     const imageData = {
