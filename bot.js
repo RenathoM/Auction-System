@@ -1809,7 +1809,7 @@ client.on('messageCreate', async (message) => {
       // Create proof embed
       proofEmbed = new EmbedBuilder()
         .setTitle('🔄 Trade Proof')
-        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || ' '}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
+        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || '📦Trade Completed'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x0099ff)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
@@ -1838,7 +1838,7 @@ client.on('messageCreate', async (message) => {
       // Create proof embed for auction
       proofEmbed = new EmbedBuilder()
         .setTitle('🎪 Auction Proof')
-        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || 'No description provided'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
+        .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || '📦Trade Completed'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x00ff00)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
@@ -1867,7 +1867,7 @@ client.on('messageCreate', async (message) => {
       // Create proof embed for giveaway
       proofEmbed = new EmbedBuilder()
         .setTitle('🎁 Giveaway Proof')
-        .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${proofData.description || 'No description provided'}`)
+        .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${proofData.description || '📦Trade Completed'}`)
         .setColor(0xFF1493)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
