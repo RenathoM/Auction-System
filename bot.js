@@ -511,6 +511,9 @@ async function removeSuspension(guild, userId) {
 // Proof upload tracking system (for timeouts)
 const proofUploadTracking = new Map(); // messageId -> { type, hostId, guestId, reminderCount, reminderTimestamp }
 
+// Waiting for proof uploads
+const waitingForProofUploads = new Map(); // userId -> proofData
+
 const PROOF_UPLOAD_TIMEOUT = 540000; // 9 minutes (3 reminders every 3 minutes)
 const PROOF_REMINDER_INTERVAL = 180000; // 3 minutes between reminders
 const PROOF_MAX_REMINDERS = 3; // Maximum 3 reminders
@@ -1768,8 +1771,11 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
   // Check if user is waiting to upload proof (regular or admin)
-  if ((message.author.waitingForProof || message.author.waitingForAdminProof) && message.attachments.size > 0) {
-    const proofData = message.author.waitingForProof || message.author.waitingForAdminProof;
+  const userProofData = waitingForProofUploads.get(message.author.id);
+  if (userProofData && message.attachments.size > 0) {
+    console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'proofData:', userProofData);
+    try {
+    const proofData = userProofData;
     const attachment = message.attachments.first();
 
     // Verify it's an image
@@ -1791,7 +1797,7 @@ client.on('messageCreate', async (message) => {
       proofChannel = guild.channels.cache.get(tradeProofChannelId);
 
       if (!proofChannel) {
-        delete message.author.waitingForProof;
+        waitingForProofUploads.delete(message.author.id);
         botLogs.addLog('PROOF_ERROR', 'Trade proof channel not found', message.author.id);
         return message.reply({ content: `⚠️ ${ERROR_CODES['E57']} | Error (E57)` });
       }
@@ -1799,7 +1805,7 @@ client.on('messageCreate', async (message) => {
       // Get trade info
       const trade = trades.get(proofData.tradeMessageId);
       if (!trade) {
-        delete message.author.waitingForProof;
+        waitingForProofUploads.delete(message.author.id);
         botLogs.addLog('PROOF_ERROR', 'Trade not found', message.author.id, { tradeId: proofData.tradeMessageId });
         return message.reply({ content: `⚠️ ${ERROR_CODES['E58']} | Error (E58)` });
       }
@@ -1819,7 +1825,7 @@ client.on('messageCreate', async (message) => {
       proofChannel = guild.channels.cache.get(auctionProofChannelId);
 
       if (!proofChannel) {
-        delete message.author.waitingForProof;
+        waitingForProofUploads.delete(message.author.id);
         botLogs.addLog('PROOF_ERROR', 'Auction proof channel not found', message.author.id);
         return message.reply({ content: `⚠️ ${ERROR_CODES['E59']} | Error (E59)` });
       }
@@ -1828,7 +1834,7 @@ client.on('messageCreate', async (message) => {
       const auctionData = finishedAuctions.get(proofData.auctionProofMessageId);
       
       if (!auctionData) {
-        delete message.author.waitingForProof;
+        waitingForProofUploads.delete(message.author.id);
         botLogs.addLog('PROOF_ERROR', 'Auction not found', message.author.id, { auctionId: proofData.auctionProofMessageId });
         return message.reply({ content: `⚠️ ${ERROR_CODES['E60']} | Error (E60)` });
       }
@@ -1848,7 +1854,7 @@ client.on('messageCreate', async (message) => {
       proofChannel = guild.channels.cache.get(giveawayProofChannelId);
 
       if (!proofChannel) {
-        delete message.author.waitingForProof;
+        waitingForProofUploads.delete(message.author.id);
         botLogs.addLog('PROOF_ERROR', 'Giveaway proof channel not found', message.author.id);
         return message.reply({ content: `⚠️ ${ERROR_CODES['E61']} | Error (E61)` });
       }
@@ -1857,7 +1863,7 @@ client.on('messageCreate', async (message) => {
       const giveawayData = finishedGiveaways.get(proofData.giveawayProofMessageId);
       
       if (!giveawayData) {
-        delete message.author.waitingForProof;
+        waitingForProofUploads.delete(message.author.id);
         botLogs.addLog('PROOF_ERROR', 'Giveaway not found', message.author.id, { giveawayId: proofData.giveawayProofMessageId });
         return message.reply({ content: `⚠️ ${ERROR_CODES['E62']} | Error (E62)` });
       }
@@ -1873,14 +1879,22 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else {
-      delete message.author.waitingForProof;
+      waitingForProofUploads.delete(message.author.id);
       botLogs.addLog('PROOF_ERROR', 'Invalid proof type', message.author.id, { type: proofData.type });
       return message.reply({ content: `⚠️ ${ERROR_CODES['E63']} | Error (E63)` });
     }
 
     // Send to proof channel with image attachment
-    const imageResponse = await fetch(attachment.url);
-    const imageBuffer = await imageResponse.arrayBuffer();
+    let imageBuffer;
+    try {
+      const imageResponse = await fetch(attachment.url);
+      if (!imageResponse.ok) throw new Error('Failed to fetch image');
+      imageBuffer = await imageResponse.arrayBuffer();
+    } catch (fetchError) {
+      console.error('Error fetching image:', fetchError);
+      botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
+      return message.reply({ content: '⚠️ Failed to download the image. Please try uploading again.' });
+    }
     const imageFile = {
       attachment: Buffer.from(imageBuffer),
       name: attachment.name || 'proof.png'
@@ -1889,6 +1903,10 @@ client.on('messageCreate', async (message) => {
     const proofMessage = await proofChannel.send({ 
       embeds: [proofEmbed.setImage(`attachment://${imageFile.name}`)], 
       files: [imageFile] 
+    }).catch(sendError => {
+      console.error('Error sending proof message:', sendError);
+      botLogs.addLog('PROOF_ERROR', 'Failed to send proof message', message.author.id, { error: sendError.message });
+      throw new Error('Failed to send proof');
     });
     
     const newImageUrl = proofMessage.attachments.first()?.url;
@@ -1939,9 +1957,14 @@ client.on('messageCreate', async (message) => {
     }
     proofUploadTracking.delete(originalMessageId);
     message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
-    delete message.author.waitingForProof;
-    delete message.author.waitingForAdminProof;
+    waitingForProofUploads.delete(message.author.id);
     return;
+    } catch (e) {
+      console.error('Error processing proof upload:', e);
+      botLogs.addLog('PROOF_ERROR', 'Failed to process proof upload', message.author.id, { error: e.message });
+      message.reply({ content: '⚠️ An error occurred while processing your proof image. Please try again.' });
+      waitingForProofUploads.delete(message.author.id);
+    }
   }
 
   // Parse bid messages
@@ -4209,7 +4232,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Store state for file upload
-      interaction.user.waitingForProof = {
+      waitingForProofUploads.set(interaction.user.id, {
         tradeMessageId: messageId,
         type: 'trade',
         channelId: trade.channelId,
@@ -4217,7 +4240,8 @@ client.on('interactionCreate', async (interaction) => {
         hostId: trade.host.id,
         guestId: trade.acceptedUser.id,
         timestamp: Date.now()
-      };
+      });
+      console.log('Set waitingForProof for user:', interaction.user.id, waitingForProofUploads.get(interaction.user.id));
 
       await interaction.deferUpdate();
 
@@ -4243,14 +4267,14 @@ client.on('interactionCreate', async (interaction) => {
       const winnerId = auctionData?.winner?.split('<@')[1]?.split('>')[0] || null;
 
       // Store state for file upload
-      interaction.user.waitingForProof = {
+      waitingForProofUploads.set(interaction.user.id, {
         auctionProofMessageId: interaction.message?.id || null,
         type: 'auction',
         privateChannelId: interaction.channelId,
         hostId: hostId,
         guestId: winnerId,
         timestamp: Date.now()
-      };
+      });
 
       await interaction.deferUpdate();
 
@@ -4282,7 +4306,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Store state for file upload
-      interaction.user.waitingForProof = {
+      waitingForProofUploads.set(interaction.user.id, {
         giveawayProofMessageId: messageId,
         type: 'giveaway',
         channelId: giveawayData.channelId,
@@ -4290,7 +4314,7 @@ client.on('interactionCreate', async (interaction) => {
         hostId: giveawayData.host.id,
         guestId: giveawayData.winner.id,
         timestamp: Date.now()
-      };
+      });
 
       await interaction.deferUpdate();
 
