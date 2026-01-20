@@ -1772,10 +1772,62 @@ client.on('messageCreate', async (message) => {
 
   // Check if user is waiting to upload proof (regular or admin)
   const userProofData = waitingForProofUploads.get(message.author.id);
-  if (userProofData && (message.attachments.size > 0 || (message.embeds.length > 0 && message.embeds[0].image))) {
-    console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'embeds:', message.embeds.length, 'proofData:', userProofData);
+  const hasAttachmentOrEmbed = message.attachments.size > 0 || (message.embeds.length > 0 && message.embeds[0]?.image);
+  
+  // Also check if message is in a private trade channel with image attachment
+  const isTradePrivateChannel = message.channel?.name?.startsWith('trade-') && hasAttachmentOrEmbed;
+  
+  if ((userProofData || isTradePrivateChannel) && hasAttachmentOrEmbed) {
+    console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'embeds:', message.embeds.length, 'proofData:', userProofData, 'isPrivateChannel:', isTradePrivateChannel);
+    console.log('Channel name:', message.channel?.name, 'Channel ID:', message.channel?.id);
     try {
-    const proofData = userProofData;
+    let proofData = userProofData;
+    
+    // If no proofData but in private channel, construct it from channel info
+    if (!proofData && isTradePrivateChannel) {
+      const channelParts = message.channel.name.split('-');
+      console.log('Parsing private channel name:', message.channel.name, 'Parts:', channelParts);
+      
+      if (channelParts.length === 3 && channelParts[0] === 'trade') {
+        const hostId = channelParts[1];
+        const guestId = channelParts[2];
+        console.log('Looking for trade with hostId:', hostId, 'guestId:', guestId);
+        
+        // Find the trade in the trades map
+        let foundTrade = null;
+        for (const [msgId, trade] of trades.entries()) {
+          console.log('Checking trade:', msgId, 'host:', trade.host.id, 'accepted:', trade.acceptedUser?.id);
+          if (trade.host.id === hostId && trade.acceptedUser?.id === guestId) {
+            foundTrade = { messageId: msgId, trade: trade };
+            console.log('Found matching trade!', msgId);
+            break;
+          }
+        }
+        
+        if (foundTrade) {
+          proofData = {
+            type: 'trade',
+            tradeMessageId: foundTrade.messageId,
+            hostId: hostId,
+            guestId: guestId,
+            channelId: foundTrade.trade.channelId,
+            privateChannelId: message.channel.id,
+            description: '📦Trade Completed'
+          };
+          console.log('Constructed proofData from private channel:', proofData);
+        } else {
+          console.log('No trade found with this host/guest combination');
+        }
+      } else {
+        console.log('Channel name format invalid for trade detection');
+      }
+    }
+    
+    if (!proofData) {
+      console.log('No proof data found and not in valid trade private channel');
+      return;
+    }
+    
     let attachment = message.attachments.first();
     let imageUrl = attachment?.url;
     
@@ -1793,7 +1845,8 @@ client.on('messageCreate', async (message) => {
     const isImage = !attachment ? true : (attachment.contentType && attachment.contentType.startsWith('image/') || 
                    attachment.name && (attachment.name.toLowerCase().endsWith('.png') || attachment.name.toLowerCase().endsWith('.jpg') || attachment.name.toLowerCase().endsWith('.jpeg') || attachment.name.toLowerCase().endsWith('.gif')));
     if (!isImage) {
-      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: proofData.type, contentType: attachment?.contentType, name: attachment?.name });
+      const errorType = proofData?.type || 'unknown';
+      botLogs.addLog('PROOF_ERROR', 'Invalid file type for proof upload', message.author.id, { type: errorType, contentType: attachment?.contentType, name: attachment?.name });
       return message.reply({ content: `⚠️ Please upload a valid image file (PNG, JPG, JPEG, GIF). | Error (E56)` });
     }
 
