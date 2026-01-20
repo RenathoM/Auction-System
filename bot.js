@@ -1770,6 +1770,17 @@ client.once('clientReady', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
+  // Debug logging for all messages
+  if (message.attachments.size > 0) {
+    console.log('[DEBUG] Message with attachment received:', {
+      author: message.author.id,
+      channelId: message.channel.id,
+      channelName: message.channel.name,
+      attachments: message.attachments.size,
+      inProofWaiting: !!waitingForProofUploads.get(message.author.id)
+    });
+  }
+
   // Check if user is waiting to upload proof (regular or admin)
   const userProofData = waitingForProofUploads.get(message.author.id);
   const hasAttachmentOrEmbed = message.attachments.size > 0 || (message.embeds.length > 0 && message.embeds[0]?.image);
@@ -3704,6 +3715,10 @@ client.on('interactionCreate', async (interaction) => {
             deny: ['ViewChannel'],
           },
           {
+            id: client.user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+          },
+          {
             id: giveaway.host.id,
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
           },
@@ -4160,6 +4175,10 @@ client.on('interactionCreate', async (interaction) => {
           {
             id: interaction.guild.id,
             deny: ['ViewChannel'],
+          },
+          {
+            id: client.user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
           },
           {
             id: trade.host.id,
@@ -7081,6 +7100,10 @@ async function endAuction(channel) {
       {
         id: channel.guild.id,
         deny: ['ViewChannel'],
+      },
+      {
+        id: client.user.id,
+        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
       },
       {
         id: auction.host.id,
