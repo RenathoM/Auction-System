@@ -1,6 +1,8 @@
 const { ReadableStream } = require('web-streams-polyfill');
 global.ReadableStream = ReadableStream;
 
+require('dotenv').config();
+
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder, userMention } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
@@ -1981,143 +1983,80 @@ client.on('messageCreate', async (message) => {
       const finalProofEmbed = proofEmbed.setImage(imageUrl);
       console.log('[DEBUG] ✅ Embed created with image URL');
       
-      console.log('[DEBUG] Downloading image from URL...');
-      console.log('[DEBUG] Image URL:', imageUrl);
+      // Send directly with Discord's hosted image (no download needed)
+      console.log('[DEBUG] Sending proof message with Discord image URL...');
+      const proofMessage = await proofChannel.send({ 
+        embeds: [finalProofEmbed]
+      });
       
-      // Use AbortController with timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      console.log('[DEBUG] ✅ Proof message sent with Discord URL, ID:', proofMessage?.id);
       
-      try {
-        const imageResponse = await fetch(imageUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        
-        console.log('[DEBUG] Image fetch response status:', imageResponse.status);
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to fetch image: ${imageResponse.status}`);
-        }
-        
-        console.log('[DEBUG] Converting response to Buffer...');
-        // Try using .buffer() first if available, otherwise use arrayBuffer()
-        let imageBuffer;
-        let imageId = null;
-        let hasImageInRedis = false;
+      // Try to download and save image to Redis in the background (don't block on this)
+      console.log('[DEBUG] Attempting to download and save image to Redis...');
+      setImmediate(async () => {
         try {
-          // Node.js fetch has a .buffer() method
-          console.log('[DEBUG] Attempting to use .buffer() method...');
-          imageBuffer = await imageResponse.buffer?.();
-          if (imageBuffer) {
-            console.log('[DEBUG] ✅ Buffer method successful, size:', imageBuffer.length, 'bytes');
-          } else {
-            throw new Error('buffer() method not available');
+          console.log('[DEBUG] Fetching image from URL:', imageUrl?.substring(0, 50));
+          const imageResponse = await fetch(imageUrl);
+          if (!imageResponse.ok) {
+            console.warn('[WARN] Failed to fetch image for Redis backup:', imageResponse.status);
+            return;
           }
-        } catch (bufferError) {
-          console.log('[DEBUG] .buffer() failed, trying .arrayBuffer()...');
-          try {
-            console.log('[DEBUG] Converting response to ArrayBuffer...');
-            const arrayBuffer = await imageResponse.arrayBuffer();
-            console.log('[DEBUG] ✅ ArrayBuffer conversion successful, size:', arrayBuffer.byteLength, 'bytes');
-            imageBuffer = Buffer.from(arrayBuffer);
-            console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length, 'bytes');
-          } catch (arrayBufferError) {
-            console.warn('[WARN] Both .buffer() and .arrayBuffer() failed, will send embed only');
-            console.log('[DEBUG] ArrayBuffer error:', arrayBufferError.message);
-            imageBuffer = null;
-          }
-        }
-        
-        // Try to save image to Redis if we have a buffer
-        if (imageBuffer) {
-          try {
-            console.log('[DEBUG] Saving image to Redis...');
-            let fileName = 'proof.png';
-            if (attachment && attachment.name) {
-              fileName = attachment.name;
-            }
-            imageId = await saveProofImageToRedis(imageBuffer, fileName);
-            hasImageInRedis = true;
-            console.log('[DEBUG] ✅ Image saved to Redis with ID:', imageId);
-          } catch (redisError) {
-            console.error('[ERROR] Failed to save image to Redis:', redisError);
-            hasImageInRedis = false;
-          }
-        }
-        
-        console.log('[DEBUG] Image saved to Redis:', hasImageInRedis, 'ID:', imageId);
-        
-        if (hasImageInRedis && imageId) {
-          console.log('[DEBUG] Sending proof message with Redis image reference...');
-          const redisImageUrl = `redis://proof/${imageId}`;
-          console.log('[DEBUG] Using Redis image URL:', redisImageUrl);
           
-          const proofMessageWithRedis = await proofChannel.send({ 
-            embeds: [finalProofEmbed.setImage(redisImageUrl)]
-          });
+          console.log('[DEBUG] Image content-type:', imageResponse.headers.get('content-type'));
+          console.log('[DEBUG] Converting image to buffer with timeout...');
           
-          console.log('[DEBUG] ✅ Proof message sent with Redis reference, ID:', proofMessageWithRedis?.id);
-        } else if (imageBuffer) {
-          // Fallback: Send with Discord file attachment
-          console.log('[DEBUG] Sending proof message with Discord file attachment (Redis failed)...');
+          // Create timeout for arrayBuffer - 20 seconds
+          const arrayBufferPromise = imageResponse.arrayBuffer();
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('arrayBuffer timeout after 20 seconds')), 20000)
+          );
+          
+          let arrayBuffer;
+          try {
+            arrayBuffer = await Promise.race([arrayBufferPromise, timeoutPromise]);
+            console.log('[DEBUG] arrayBuffer conversion completed');
+          } catch (timeoutError) {
+            console.warn('[WARN] arrayBuffer conversion timed out, skipping Redis save:', timeoutError.message);
+            return;
+          }
+          
+          const imageBuffer = Buffer.from(arrayBuffer);
+          console.log('[DEBUG] ✅ Image buffer created, size:', imageBuffer.length, 'bytes');
+          
+          // Save to Redis
+          console.log('[DEBUG] Saving image to Redis...');
           let fileName = 'proof.png';
           if (attachment && attachment.name) {
             fileName = attachment.name;
           }
-          console.log('[DEBUG] Using filename:', fileName);
+          const imageId = await saveProofImageToRedis(imageBuffer, fileName);
+          console.log('[DEBUG] ✅ Image saved to Redis with ID:', imageId);
           
-          const imageFile = {
-            attachment: imageBuffer,
-            name: fileName
-          };
-          
-          const proofMessage = await proofChannel.send({ 
-            embeds: [finalProofEmbed],
-            files: [imageFile]
-          });
-          
-          console.log('[DEBUG] ✅ Proof message sent with file attachment, ID:', proofMessage?.id);
-        } else {
-          console.log('[DEBUG] Sending proof message with embed only (no file attachment)...');
-          const proofMessage = await proofChannel.send({ 
-            embeds: [finalProofEmbed]
-          });
-          
-          console.log('[DEBUG] ✅ Proof message sent with embed only, ID:', proofMessage?.id);
-        }
-      } catch (fetchError) {
-        if (fetchError.name === 'AbortError') {
-          console.error('[ERROR] Image download timeout (10 seconds), will send embed only');
-          console.log('[DEBUG] Sending proof message with embed only due to timeout...');
-          try {
-            const proofMessage = await proofChannel.send({ 
-              embeds: [finalProofEmbed]
-            });
-            console.log('[DEBUG] ✅ Proof message sent with embed only (timeout fallback), ID:', proofMessage?.id);
-          } catch (sendError) {
-            console.error('[ERROR] Failed to send proof message (fallback):', sendError);
-            botLogs.addLog('PROOF_ERROR', 'Failed to send proof message on timeout fallback', message.author.id, { error: sendError.message });
-            return message.reply({ content: '⚠️ Failed to send proof. Please try uploading again.' });
+          // Store the imageId in the tracking for later reference
+          const tracking = proofUploadTracking.get(originalMessageId);
+          if (tracking) {
+            tracking.redisImageId = imageId;
+            proofUploadTracking.set(originalMessageId, tracking);
+            console.log('[DEBUG] ✅ Redis image ID stored in tracking');
           }
-        } else {
-          console.error('[ERROR] Error fetching image:', fetchError);
-          console.log('[DEBUG] Attempting fallback: sending proof message with embed only...');
-          try {
-            const proofMessage = await proofChannel.send({ 
-              embeds: [finalProofEmbed]
-            });
-            console.log('[DEBUG] ✅ Proof message sent with embed only (fallback), ID:', proofMessage?.id);
-          } catch (sendError) {
-            console.error('[ERROR] Failed to send proof message (fallback):', sendError);
-            botLogs.addLog('PROOF_ERROR', 'Failed to download and send proof image', message.author.id, { error: fetchError.message, fallbackError: sendError.message });
-            return message.reply({ content: '⚠️ Failed to process proof. Please try uploading again.' });
-          }
+        } catch (redisError) {
+          console.warn('[WARN] Failed to save image to Redis:', redisError.message);
+          // Don't block - image is already sent with Discord URL
         }
-      }
+      });
+    } catch (error) {
+      console.error('[ERROR] Failed to send proof message:', error);
+      botLogs.addLog('PROOF_ERROR', 'Failed to send proof message', message.author.id, { error: error.message });
+      return message.reply({ content: '⚠️ Failed to send proof. Please try uploading again.' });
+    }
     
+    try {
+
       // Image URL for original embed thumbnail
       const newImageUrl = imageUrl;
       console.log('[DEBUG] Image URL for original embed:', newImageUrl?.substring(0, 50));
       
-      // Update the original embed with thumbnail
+      // Update the original embed with thumbnail and remove upload button
       console.log('[DEBUG] Attempting to update original embed...');
       try {
         const channel = guild.channels.cache.get(proofData.channelId || (proofData.type === 'trade' ? (trades.get(originalMessageId)?.channelId) : null));
@@ -2130,9 +2069,10 @@ client.on('messageCreate', async (message) => {
             const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
               .setThumbnail(newImageUrl);
             
-            await originalMessage.edit({ embeds: [updatedEmbed] });
+            // Remove the upload proof button by sending message with empty components
+            await originalMessage.edit({ embeds: [updatedEmbed], components: [] });
             botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail${isAdminUpload ? ' (admin upload)' : ''}`, message.author.id, { type: proofData.type });
-            console.log('[DEBUG] Original embed updated successfully');
+            console.log('[DEBUG] Original embed updated successfully - Upload button removed');
           }
         }
       } catch (e) {
@@ -4499,114 +4439,156 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId.startsWith('upload_proof_trade_')) {
-      const messageId = interaction.customId.replace('upload_proof_trade_', '');
-      const trade = trades.get(messageId);
-      if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+      try {
+        const messageId = interaction.customId.replace('upload_proof_trade_', '');
+        const trade = trades.get(messageId);
+        if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
-      // Check if user is host or accepted user
-      if (trade.host.id !== interaction.user.id && trade.acceptedUser.id !== interaction.user.id) {
-        return sendErrorReply(interaction, 'E02');
+        // Check if user is host or accepted user
+        if (trade.host.id !== interaction.user.id && trade.acceptedUser.id !== interaction.user.id) {
+          return sendErrorReply(interaction, 'E02');
+        }
+
+        // Defer update first (must be within 3 seconds)
+        try {
+          await interaction.deferUpdate();
+        } catch (deferError) {
+          console.warn('[WARN] Defer update failed (interaction may have expired):', deferError.message);
+        }
+
+        // Store state for file upload
+        waitingForProofUploads.set(interaction.user.id, {
+          tradeMessageId: messageId,
+          type: 'trade',
+          channelId: trade.channelId,
+          privateChannelId: interaction.channelId,
+          hostId: trade.host.id,
+          guestId: trade.acceptedUser.id,
+          timestamp: Date.now()
+        });
+        console.log('Set waitingForProof for user:', interaction.user.id, waitingForProofUploads.get(interaction.user.id));
+
+        // Try to send followup if deferUpdate succeeded
+        try {
+          await interaction.followUp({
+            content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your trade.',
+            flags: 64
+          });
+        } catch (followupError) {
+          console.warn('[WARN] Follow-up message failed:', followupError.message);
+        }
+
+        // Start timeout system
+        startProofUploadTimeout(messageId, interaction.guild, {
+          type: 'trade',
+          hostId: trade.host.id,
+          guestId: trade.acceptedUser.id,
+          channelId: interaction.channelId
+        });
+      } catch (error) {
+        console.error('[ERROR] Error in upload_proof_trade handler:', error);
       }
-
-      // Store state for file upload
-      waitingForProofUploads.set(interaction.user.id, {
-        tradeMessageId: messageId,
-        type: 'trade',
-        channelId: trade.channelId,
-        privateChannelId: interaction.channelId,
-        hostId: trade.host.id,
-        guestId: trade.acceptedUser.id,
-        timestamp: Date.now()
-      });
-      console.log('Set waitingForProof for user:', interaction.user.id, waitingForProofUploads.get(interaction.user.id));
-
-      await interaction.deferUpdate();
-
-      await interaction.followUp({
-        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your trade.',
-        flags: 64
-      });
-
-      // Start timeout system
-      startProofUploadTimeout(messageId, interaction.guild, {
-        type: 'trade',
-        hostId: trade.host.id,
-        guestId: trade.acceptedUser.id,
-        channelId: interaction.channelId
-      });
     }
 
     if (interaction.customId.startsWith('upload_proof_auction_')) {
-      // Get auction data for tracking
-      const messageId = interaction.message?.id;
-      const auctionData = finishedAuctions.get(messageId);
-      const hostId = auctionData?.host?.id || null;
-      const winnerId = auctionData?.winner?.split('<@')[1]?.split('>')[0] || null;
+      try {
+        // Get auction data for tracking
+        const messageId = interaction.message?.id;
+        const auctionData = finishedAuctions.get(messageId);
+        const hostId = auctionData?.host?.id || null;
+        const winnerId = auctionData?.winner?.split('<@')[1]?.split('>')[0] || null;
 
-      // Store state for file upload
-      waitingForProofUploads.set(interaction.user.id, {
-        auctionProofMessageId: interaction.message?.id || null,
-        type: 'auction',
-        privateChannelId: interaction.channelId,
-        hostId: hostId,
-        guestId: winnerId,
-        timestamp: Date.now()
-      });
+        // Defer update first (must be within 3 seconds)
+        try {
+          await interaction.deferUpdate();
+        } catch (deferError) {
+          console.warn('[WARN] Defer update failed (interaction may have expired):', deferError.message);
+        }
 
-      await interaction.deferUpdate();
-
-      await interaction.followUp({
-        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your auction.',
-        flags: 64
-      });
-
-      // Start timeout system
-      if (messageId && hostId && winnerId) {
-        startProofUploadTimeout(messageId, interaction.guild, {
+        // Store state for file upload
+        waitingForProofUploads.set(interaction.user.id, {
+          auctionProofMessageId: messageId || null,
           type: 'auction',
+          privateChannelId: interaction.channelId,
           hostId: hostId,
           guestId: winnerId,
-          channelId: interaction.channelId
+          timestamp: Date.now()
         });
+
+        // Try to send followup if deferUpdate succeeded
+        try {
+          await interaction.followUp({
+            content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your auction.',
+            flags: 64
+          });
+        } catch (followupError) {
+          console.warn('[WARN] Follow-up message failed:', followupError.message);
+        }
+
+        // Start timeout system
+        if (messageId && hostId && winnerId) {
+          startProofUploadTimeout(messageId, interaction.guild, {
+            type: 'auction',
+            hostId: hostId,
+            guestId: winnerId,
+            channelId: interaction.channelId
+          });
+        }
+      } catch (error) {
+        console.error('[ERROR] Error in upload_proof_auction handler:', error);
       }
     }
 
     if (interaction.customId.startsWith('upload_proof_giveaway_')) {
-      // Get giveaway data
-      const messageId = interaction.message.id;
-      const giveawayData = finishedGiveaways.get(messageId);
-      if (!giveawayData) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
+      try {
+        // Get giveaway data
+        const messageId = interaction.message.id;
+        const giveawayData = finishedGiveaways.get(messageId);
+        if (!giveawayData) return sendErrorReply(interaction, 'E36', 'Giveaway not found');
 
-      // Check if user is host or winner
-      if (giveawayData.host.id !== interaction.user.id && giveawayData.winner.id !== interaction.user.id) {
-        return sendErrorReply(interaction, 'E02');
+        // Check if user is host or winner
+        if (giveawayData.host.id !== interaction.user.id && giveawayData.winner.id !== interaction.user.id) {
+          return sendErrorReply(interaction, 'E02');
+        }
+
+        // Defer update first (must be within 3 seconds)
+        try {
+          await interaction.deferUpdate();
+        } catch (deferError) {
+          console.warn('[WARN] Defer update failed (interaction may have expired):', deferError.message);
+        }
+
+        // Store state for file upload
+        waitingForProofUploads.set(interaction.user.id, {
+          giveawayProofMessageId: messageId,
+          type: 'giveaway',
+          channelId: giveawayData.channelId,
+          privateChannelId: interaction.channelId,
+          hostId: giveawayData.host.id,
+          guestId: giveawayData.winner.id,
+          timestamp: Date.now()
+        });
+
+        // Try to send followup if deferUpdate succeeded
+        try {
+          await interaction.followUp({
+            content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your giveaway.',
+            flags: 64
+          });
+        } catch (followupError) {
+          console.warn('[WARN] Follow-up message failed:', followupError.message);
+        }
+
+        // Start timeout system
+        startProofUploadTimeout(messageId, interaction.guild, {
+          type: 'giveaway',
+          hostId: giveawayData.host.id,
+          guestId: giveawayData.winner.id,
+          channelId: interaction.channelId
+        });
+      } catch (error) {
+        console.error('[ERROR] Error in upload_proof_giveaway handler:', error);
       }
-
-      // Store state for file upload
-      waitingForProofUploads.set(interaction.user.id, {
-        giveawayProofMessageId: messageId,
-        type: 'giveaway',
-        channelId: giveawayData.channelId,
-        privateChannelId: interaction.channelId,
-        hostId: giveawayData.host.id,
-        guestId: giveawayData.winner.id,
-        timestamp: Date.now()
-      });
-
-      await interaction.deferUpdate();
-
-      await interaction.followUp({
-        content: '📸 **Upload Proof Image**\n\nPlease send your proof image (PNG or JPG) in the next message in this channel. The image will be automatically captured and linked to your giveaway.',
-        flags: 64
-      });
-
-      // Start timeout system
-      startProofUploadTimeout(messageId, interaction.guild, {
-        type: 'giveaway',
-        hostId: giveawayData.host.id,
-        guestId: giveawayData.winner.id,
-        channelId: interaction.channelId
-      });
     }
 
     if (interaction.customId.startsWith('delete_channel_')) {
