@@ -1809,7 +1809,7 @@ client.on('messageCreate', async (message) => {
       // Create proof embed
       proofEmbed = new EmbedBuilder()
         .setTitle('🔄 Trade Proof')
-        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || 'No description provided'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
+        .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || ' '}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x0099ff)
         .setImage(attachment.url)
         .setFooter({ text: `Submitted by <@${message.author.id}>` })
@@ -1899,26 +1899,21 @@ client.on('messageCreate', async (message) => {
       botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
     }
 
-    // Update the private channel embed with delete button
+    // Send a new message in the private channel with delete button
     try {
       const privateChannel = guild.channels.cache.get(proofData.privateChannelId);
       if (privateChannel) {
-        // Get the first message in the private channel (the proof embed)
-        const messages = await privateChannel.messages.fetch({ limit: 1 });
-        const proofMessage = messages.first();
-        if (proofMessage && proofMessage.embeds.length > 0) {
-          const deleteButton = new ButtonBuilder()
-            .setCustomId(`delete_channel_${proofData.privateChannelId}`)
-            .setLabel('Delete Channel')
-            .setStyle(ButtonStyle.Danger);
+        const deleteButton = new ButtonBuilder()
+          .setCustomId(`delete_channel_${proofData.privateChannelId}`)
+          .setLabel('Delete Channel')
+          .setStyle(ButtonStyle.Danger);
 
-          const row = new ActionRowBuilder().addComponents(deleteButton);
-          await proofMessage.edit({ embeds: proofMessage.embeds, components: [row] });
-        }
+        const row = new ActionRowBuilder().addComponents(deleteButton);
+        await privateChannel.send({ content: '✅ **Proof submitted successfully!**\n\nYou can now delete this channel.', components: [row] });
       }
     } catch (e) {
-      console.error('Error updating private channel embed with delete button:', e);
-      botLogs.addLog('PROOF_ERROR', 'Failed to add delete button to private channel', message.author.id, { error: e.message });
+      console.error('Error sending delete button message to private channel:', e);
+      botLogs.addLog('PROOF_ERROR', 'Failed to send delete button message to private channel', message.author.id, { error: e.message });
     }
 
     // Mark as proof uploaded and clear tracking for this message
@@ -4315,7 +4310,7 @@ client.on('interactionCreate', async (interaction) => {
       const updateButton = async () => {
         const deleteButton = new ButtonBuilder()
           .setCustomId(`delete_channel_${channelId}`)
-          .setLabel(`Delete Channel (${countdown})`)
+          .setLabel(`Deleting channel in ${countdown}...`)
           .setStyle(ButtonStyle.Danger)
           .setDisabled(true);
 
