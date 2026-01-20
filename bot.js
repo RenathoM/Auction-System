@@ -1985,10 +1985,14 @@ client.on('messageCreate', async (message) => {
         console.error('[ERROR] Bad response status:', imageResponse.status);
         throw new Error(`Failed to fetch image: ${imageResponse.status}`);
       }
-      console.log('[DEBUG] Converting response to arrayBuffer...');
-      imageBuffer = await imageResponse.arrayBuffer();
-      console.log('[DEBUG] ✅ arrayBuffer conversion successful');
-      console.log('[DEBUG] Image buffer size:', imageBuffer.byteLength, 'bytes');
+      
+      console.log('[DEBUG] Converting response to buffer...');
+      // Use .arrayBuffer() then convert to Buffer
+      const arrayBuf = await imageResponse.arrayBuffer();
+      console.log('[DEBUG] ✅ arrayBuffer conversion successful, size:', arrayBuf.byteLength);
+      imageBuffer = Buffer.from(arrayBuf);
+      console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length);
+      
       if (attachment && attachment.name) {
         fileName = attachment.name;
       }
@@ -2004,7 +2008,7 @@ client.on('messageCreate', async (message) => {
     
     console.log('[DEBUG] Creating image file object...');
     const imageFile = {
-      attachment: Buffer.from(imageBuffer),
+      attachment: imageBuffer,
       name: fileName
     };
     console.log('[DEBUG] Image file object created, size:', imageFile.attachment.length);
