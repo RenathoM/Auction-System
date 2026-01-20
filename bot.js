@@ -3,7 +3,7 @@ global.ReadableStream = ReadableStream;
 
 require('dotenv').config();
 
-const { Client, Intents, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, MessageSelectMenu, userMention } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder, userMention } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
 const redis = require('redis');
@@ -45,7 +45,7 @@ function updateVersionFile(category, newVersion) {
   }
 }
 
-const client = new Client({ intents: new Intents().add(['GUILDS', 'GUILD_MESSAGES', 'MESSAGE_CONTENT']) });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 // Redis client
 const redisClient = redis.createClient({
@@ -4069,7 +4069,9 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Show category selection
-      const categorySelect = new MessageSelectMenu()
+      const { StringSelectMenuBuilder } = require('discord.js');
+      
+      const categorySelect = new StringSelectMenuBuilder()
         .setCustomId('trade_category_select')
         .setPlaceholder('Select an item category')
         .addOptions([
