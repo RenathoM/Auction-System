@@ -1828,7 +1828,7 @@ client.on('messageCreate', async (message) => {
         .setTitle('🔄 Trade Proof')
         .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || '📦Trade Completed'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x0099ff)
-        .setImage(attachment.url)
+        .setImage(imageUrl)
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else if (proofData.type === 'auction') {
@@ -1857,7 +1857,7 @@ client.on('messageCreate', async (message) => {
         .setTitle('🎪 Auction Proof')
         .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || '📦Trade Completed'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x00ff00)
-        .setImage(attachment.url)
+        .setImage(imageUrl)
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else if (proofData.type === 'giveaway') {
@@ -1886,7 +1886,7 @@ client.on('messageCreate', async (message) => {
         .setTitle('🎁 Giveaway Proof')
         .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${proofData.description || '📦Trade Completed'}`)
         .setColor(0xFF1493)
-        .setImage(attachment.url)
+        .setImage(imageUrl)
         .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else {
@@ -1897,10 +1897,14 @@ client.on('messageCreate', async (message) => {
 
     // Send to proof channel with image attachment
     let imageBuffer;
+    let fileName = 'proof.png';
     try {
-      const imageResponse = await fetch(attachment.url);
+      const imageResponse = await fetch(imageUrl);
       if (!imageResponse.ok) throw new Error('Failed to fetch image');
       imageBuffer = await imageResponse.arrayBuffer();
+      if (attachment && attachment.name) {
+        fileName = attachment.name;
+      }
     } catch (fetchError) {
       console.error('Error fetching image:', fetchError);
       botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
@@ -1908,7 +1912,7 @@ client.on('messageCreate', async (message) => {
     }
     const imageFile = {
       attachment: Buffer.from(imageBuffer),
-      name: attachment.name || 'proof.png'
+      name: fileName
     };
     
     const proofMessage = await proofChannel.send({ 
@@ -2149,49 +2153,47 @@ function startProofUploadTimeout(messageId, guild, proofData) {
 
     trackingData.timeout = timeoutId;
 
-    // Set reminders (3 times, every minute)
+    // Set reminders (3 times, one every 3 minutes: at 3min, 6min, 9min)
     const reminderIntervals = [];
     let reminderCount = 0;
+    const reminderTimes = [3 * 60 * 1000, 6 * 60 * 1000, 9 * 60 * 1000]; // 3, 6, 9 minutes
 
-    const reminderInterval = setInterval(async () => {
-      try {
-        reminderCount++;
-        if (reminderCount > PROOF_MAX_REMINDERS) {
-          clearInterval(reminderInterval);
-          return;
-        }
-
-        const tracking = proofUploadTracking.get(messageId);
-        if (!tracking || tracking.proofUploaded) {
-          clearInterval(reminderInterval);
-          return;
-        }
-
-        const channel = guild.channels.cache.get(proofData.channelId);
-        if (channel) {
-          const timeRemaining = Math.ceil((PROOF_UPLOAD_TIMEOUT - (Date.now() - trackingData.reminderTimestamp)) / 1000);
-          const timeMinutes = Math.ceil(timeRemaining / 60);
-          
-          let message = `⏰ **Proof Upload Reminder (${reminderCount}/${PROOF_MAX_REMINDERS})**\n\n`;
-          
-          if (proofData.type === 'trade') {
-            message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your trade.\n\n`;
-          } else {
-            message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your ${proofData.type}.\n\n`;
+    reminderTimes.forEach((delayTime) => {
+      const reminderId = setTimeout(async () => {
+        try {
+          reminderCount++;
+          const tracking = proofUploadTracking.get(messageId);
+          if (!tracking || tracking.proofUploaded) {
+            return;
           }
-          
-          message += `⏱️ Time remaining: ${timeMinutes} minute${timeMinutes !== 1 ? 's' : ''}\n`;
-          message += `📸 Upload the image in this channel to complete the proof.`;
-          
-          await channel.send(message).catch(() => null);
-          botLogs.addLog('PROOF_REMINDER', `Reminder ${reminderCount}/${PROOF_MAX_REMINDERS} sent`, null, { type: proofData.type, messageId });
-        }
-      } catch (e) {
-        console.error('Error in reminder interval:', e);
-      }
-    }, PROOF_REMINDER_INTERVAL);
 
-    reminderIntervals.push(reminderInterval);
+          const channel = guild.channels.cache.get(proofData.channelId);
+          if (channel) {
+            const timeRemaining = Math.ceil((PROOF_UPLOAD_TIMEOUT - (Date.now() - trackingData.reminderTimestamp)) / 1000);
+            const timeMinutes = Math.ceil(timeRemaining / 60);
+            
+            let message = `⏰ **Proof Upload Reminder (${reminderCount}/${PROOF_MAX_REMINDERS})**\n\n`;
+            
+            if (proofData.type === 'trade') {
+              message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your trade.\n\n`;
+            } else {
+              message += `<@${proofData.hostId}> and <@${proofData.guestId}>, please upload the proof image for your ${proofData.type}.\n\n`;
+            }
+            
+            message += `⏱️ Time remaining: ${timeMinutes} minute${timeMinutes !== 1 ? 's' : ''}\n`;
+            message += `📸 Upload the image in this channel to complete the proof.`;
+            
+            await channel.send(message).catch(() => null);
+            botLogs.addLog('PROOF_REMINDER', `Reminder ${reminderCount}/${PROOF_MAX_REMINDERS} sent`, null, { type: proofData.type, messageId, delayMinutes: delayTime / 60000 });
+          }
+        } catch (e) {
+          console.error('Error in reminder timeout:', e);
+        }
+      }, delayTime);
+      
+      reminderIntervals.push(reminderId);
+    });
+
     trackingData.reminderIntervals = reminderIntervals;
 
   } catch (e) {
