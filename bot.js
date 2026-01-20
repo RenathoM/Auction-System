@@ -138,6 +138,8 @@ const ERROR_CODES = {
   'E65': 'An error occurred while clearing bot messages',
   
   // Additional errors (66-80)
+  'E64': 'This trade has already been accepted',
+  'E65': 'Cannot decline offers after the trade has been accepted',
   'E66': 'Trade offer has been declined',
   'E67': 'Please use the file upload feature. Reply to this message with an image attachment',
   'E68': 'Please provide a valid image URL',
@@ -4040,6 +4042,7 @@ client.on('interactionCreate', async (interaction) => {
       const offerIndex = parseInt(parts[1]);
       const trade = trades.get(messageId);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+      if (trade.accepted) return sendErrorReply(interaction, 'E64', 'This trade has already been accepted');
       if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
       if (offerIndex < 0 || offerIndex >= trade.offers.length) return sendErrorReply(interaction, 'E09', 'Invalid offer');
 
@@ -4127,6 +4130,7 @@ client.on('interactionCreate', async (interaction) => {
       const offerIndex = parseInt(parts[1]);
       const trade = trades.get(messageId);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+      if (trade.accepted) return sendErrorReply(interaction, 'E65', 'Cannot decline offers after the trade has been accepted');
       if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
       if (offerIndex < 0 || offerIndex >= trade.offers.length) return sendErrorReply(interaction, 'E09', 'Invalid offer');
 
