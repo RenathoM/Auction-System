@@ -1791,10 +1791,9 @@ client.on('messageCreate', async (message) => {
   if ((userProofData || isTradePrivateChannel) && hasAttachmentOrEmbed) {
     console.log('Proof upload detected for user:', message.author.id, 'attachments:', message.attachments.size, 'embeds:', message.embeds.length, 'proofData:', userProofData, 'isPrivateChannel:', isTradePrivateChannel);
     console.log('Channel name:', message.channel?.name, 'Channel ID:', message.channel?.id);
-    try {
-      console.log('[DEBUG] Starting proof upload processing...');
-      let proofData = userProofData;
-      console.log('[DEBUG] Initial proofData:', proofData);
+    console.log('[DEBUG] Starting proof upload processing...');
+    let proofData = userProofData;
+    console.log('[DEBUG] Initial proofData:', proofData);
     
     // If no proofData but in private channel, construct it from channel info
     if (!proofData && isTradePrivateChannel) {
@@ -1974,129 +1973,140 @@ client.on('messageCreate', async (message) => {
 
     // Send to proof channel with image attachment
     console.log('[DEBUG] Attempting to send proof to channel...');
-    let imageBuffer;
-    let fileName = 'proof.png';
+    console.log('[DEBUG] Proof channel:', proofChannel?.name, 'ID:', proofChannel?.id);
+    
     try {
-      console.log('[DEBUG] Fetching image from URL...');
+      console.log('[DEBUG] Creating proof embed with image...');
+      const finalProofEmbed = proofEmbed.setImage(imageUrl);
+      console.log('[DEBUG] ✅ Embed created with image URL');
+      
+      console.log('[DEBUG] Downloading image from URL...');
       console.log('[DEBUG] Image URL:', imageUrl);
-      const imageResponse = await fetch(imageUrl);
-      console.log('[DEBUG] Image fetch response status:', imageResponse.status);
-      if (!imageResponse.ok) {
-        console.error('[ERROR] Bad response status:', imageResponse.status);
-        throw new Error(`Failed to fetch image: ${imageResponse.status}`);
-      }
       
-      console.log('[DEBUG] Converting response to buffer...');
-      // Use .arrayBuffer() then convert to Buffer
-      const arrayBuf = await imageResponse.arrayBuffer();
-      console.log('[DEBUG] ✅ arrayBuffer conversion successful, size:', arrayBuf.byteLength);
-      imageBuffer = Buffer.from(arrayBuf);
-      console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length);
+      // Use AbortController with timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
-      if (attachment && attachment.name) {
-        fileName = attachment.name;
-      }
-      console.log('[DEBUG] Using filename:', fileName);
-    } catch (fetchError) {
-      console.error('[ERROR] Caught exception in fetch block:', fetchError);
-      console.error('[ERROR] Error type:', fetchError.constructor.name);
-      console.error('[ERROR] Error message:', fetchError.message);
-      console.error('[ERROR] Error stack:', fetchError.stack);
-      botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
-      return message.reply({ content: '⚠️ Failed to download the image. Please try uploading again.' });
-    }
-    
-    console.log('[DEBUG] Creating image file object...');
-    const imageFile = {
-      attachment: imageBuffer,
-      name: fileName
-    };
-    console.log('[DEBUG] Image file object created, size:', imageFile.attachment.length);
-    
-    console.log('[DEBUG] Sending proof message to channel:', proofChannel?.name, 'ID:', proofChannel?.id);
-    const proofMessage = await proofChannel.send({ 
-      embeds: [proofEmbed.setImage(`attachment://${imageFile.name}`)], 
-      files: [imageFile] 
-    }).catch(sendError => {
-      console.error('[ERROR] Error sending proof message:', sendError);
-      console.error('[ERROR] Error type:', sendError.constructor.name);
-      console.error('[ERROR] Error message:', sendError.message);
-      botLogs.addLog('PROOF_ERROR', 'Failed to send proof message', message.author.id, { error: sendError.message });
-      throw new Error('Failed to send proof');
-    });
-    
-    console.log('[DEBUG] ✅ Proof message sent successfully, ID:', proofMessage?.id);
-    
-    const newImageUrl = proofMessage.attachments.first()?.url;
-    console.log('[DEBUG] New image URL from proof message:', newImageUrl?.substring(0, 50));
-    
-    // Update the original embed with thumbnail
-    console.log('[DEBUG] Attempting to update original embed...');
-    try {
-      const channel = guild.channels.cache.get(proofData.channelId || (proofData.type === 'trade' ? (trades.get(originalMessageId)?.channelId) : null));
-      console.log('[DEBUG] Original channel:', channel?.name, channel?.id);
-      if (channel && originalMessageId) {
-        console.log('[DEBUG] Fetching original message:', originalMessageId);
-        const originalMessage = await channel.messages.fetch(originalMessageId).catch(() => null);
-        console.log('[DEBUG] Original message found:', !!originalMessage);
-        if (originalMessage && originalMessage.embeds.length > 0) {
-          const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
-            .setThumbnail(newImageUrl || attachment.url);
-          
-          await originalMessage.edit({ embeds: [updatedEmbed] });
-          botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail${isAdminUpload ? ' (admin upload)' : ''}`, message.author.id, { type: proofData.type });
-          console.log('[DEBUG] Original embed updated successfully');
+      try {
+        const imageResponse = await fetch(imageUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        console.log('[DEBUG] Image fetch response status:', imageResponse.status);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to fetch image: ${imageResponse.status}`);
         }
+        
+        console.log('[DEBUG] Converting response to ArrayBuffer...');
+        const arrayBuffer = await imageResponse.arrayBuffer();
+        console.log('[DEBUG] ✅ ArrayBuffer conversion successful, size:', arrayBuffer.byteLength, 'bytes');
+        
+        const imageBuffer = Buffer.from(arrayBuffer);
+        console.log('[DEBUG] ✅ Converted to Node.js Buffer, size:', imageBuffer.length, 'bytes');
+        
+        let fileName = 'proof.png';
+        if (attachment && attachment.name) {
+          fileName = attachment.name;
+        }
+        console.log('[DEBUG] Using filename:', fileName);
+        
+        const imageFile = {
+          attachment: imageBuffer,
+          name: fileName
+        };
+        
+        console.log('[DEBUG] Sending proof message to channel with image attachment...');
+        const proofMessage = await proofChannel.send({ 
+          embeds: [finalProofEmbed],
+          files: [imageFile]
+        });
+        
+        console.log('[DEBUG] ✅ Proof message sent successfully, ID:', proofMessage?.id);
+        
+        // Get the URL of the attached image from the proof message
+        const newImageUrl = proofMessage.attachments.first()?.url;
+        console.log('[DEBUG] Image URL in proof message:', newImageUrl?.substring(0, 50));
+      } catch (fetchError) {
+        if (fetchError.name === 'AbortError') {
+          console.error('[ERROR] Image download timeout (10 seconds)');
+          botLogs.addLog('PROOF_ERROR', 'Image download timeout', message.author.id, { error: 'Timeout after 10 seconds' });
+        } else {
+          console.error('[ERROR] Error fetching/converting image:', fetchError);
+          botLogs.addLog('PROOF_ERROR', 'Failed to download proof image', message.author.id, { error: fetchError.message });
+        }
+        return message.reply({ content: '⚠️ Failed to download the image. Please try uploading again.' });
       }
-    } catch (e) {
-      console.error('[ERROR] Error updating original embed with thumbnail:', e);
-      botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
-    }
-
-    // Send a new message in the private channel with delete button
-    console.log('[DEBUG] Sending delete button to private channel...');
-    try {
-      const privateChannel = guild.channels.cache.get(proofData.privateChannelId);
-      console.log('[DEBUG] Private channel:', privateChannel?.name, privateChannel?.id);
-      if (privateChannel) {
-        const deleteButton = new ButtonBuilder()
-          .setCustomId(`delete_channel_${proofData.privateChannelId}`)
-          .setLabel('Delete Channel')
-          .setStyle(ButtonStyle.Danger);
-
-        const row = new ActionRowBuilder().addComponents(deleteButton);
-        await privateChannel.send({ content: '✅ **Proof submitted successfully!**\n\nYou can now delete this channel.', components: [row] });
-        console.log('[DEBUG] Delete button sent successfully');
-      }
-    } catch (e) {
-      console.error('[ERROR] Error sending delete button message to private channel:', e);
-      botLogs.addLog('PROOF_ERROR', 'Failed to send delete button message to private channel', message.author.id, { error: e.message });
-    }
-
-    // Mark as proof uploaded and clear tracking for this message
-    console.log('[DEBUG] Marking proof as uploaded and clearing tracking...');
-    const tracking = proofUploadTracking.get(originalMessageId);
-    console.log('[DEBUG] Attempting to get proofUploadTracking for originalMessageId:', originalMessageId);
-    console.log('[DEBUG] Current proofUploadTracking keys:', Array.from(proofUploadTracking.keys()));
     
-    if (tracking) {
-      console.log('[DEBUG] Found tracking entry, marking as proofUploaded');
-      tracking.proofUploaded = true;
-      if (tracking.timeout) clearTimeout(tracking.timeout);
-      if (tracking.reminderTimeouts) {
-        console.log('[DEBUG] Clearing', tracking.reminderTimeouts.length, 'reminder timeouts');
-        tracking.reminderTimeouts.forEach(id => clearTimeout(id));
+      // Image URL is already set in the embed
+      const newImageUrl = imageUrl;
+      console.log('[DEBUG] Image URL for original embed:', newImageUrl?.substring(0, 50));
+      
+      // Update the original embed with thumbnail
+      console.log('[DEBUG] Attempting to update original embed...');
+      try {
+        const channel = guild.channels.cache.get(proofData.channelId || (proofData.type === 'trade' ? (trades.get(originalMessageId)?.channelId) : null));
+        console.log('[DEBUG] Original channel:', channel?.name, channel?.id);
+        if (channel && originalMessageId) {
+          console.log('[DEBUG] Fetching original message:', originalMessageId);
+          const originalMessage = await channel.messages.fetch(originalMessageId).catch(() => null);
+          console.log('[DEBUG] Original message found:', !!originalMessage);
+          if (originalMessage && originalMessage.embeds.length > 0) {
+            const updatedEmbed = EmbedBuilder.from(originalMessage.embeds[0])
+              .setThumbnail(newImageUrl);
+            
+            await originalMessage.edit({ embeds: [updatedEmbed] });
+            botLogs.addLog('PROOF_SUCCESS', `Proof image added with thumbnail${isAdminUpload ? ' (admin upload)' : ''}`, message.author.id, { type: proofData.type });
+            console.log('[DEBUG] Original embed updated successfully');
+          }
+        }
+      } catch (e) {
+        console.error('[ERROR] Error updating original embed with thumbnail:', e);
+        botLogs.addLog('PROOF_ERROR', 'Failed to update original embed', message.author.id, { error: e.message });
       }
-    } else {
-      console.warn('[WARN] proofUploadTracking entry not found for:', originalMessageId, 'Available keys:', Array.from(proofUploadTracking.keys()));
-    }
-    proofUploadTracking.delete(originalMessageId);
-    console.log('[DEBUG] Sending success reply to user...');
-    message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
-    console.log('[DEBUG] Deleting from waitingForProofUploads...');
-    waitingForProofUploads.delete(message.author.id);
-    console.log('[DEBUG] Proof upload processing completed successfully!');
-    return;
+
+      // Send a new message in the private channel with delete button
+      console.log('[DEBUG] Sending delete button to private channel...');
+      try {
+        const privateChannel = guild.channels.cache.get(proofData.privateChannelId);
+        console.log('[DEBUG] Private channel:', privateChannel?.name, privateChannel?.id);
+        if (privateChannel) {
+          const deleteButton = new ButtonBuilder()
+            .setCustomId(`delete_channel_${proofData.privateChannelId}`)
+            .setLabel('Delete Channel')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(deleteButton);
+          await privateChannel.send({ content: '✅ **Proof submitted successfully!**\n\nYou can now delete this channel.', components: [row] });
+          console.log('[DEBUG] Delete button sent successfully');
+        }
+      } catch (e) {
+        console.error('[ERROR] Error sending delete button message to private channel:', e);
+        botLogs.addLog('PROOF_ERROR', 'Failed to send delete button message to private channel', message.author.id, { error: e.message });
+      }
+
+      // Mark as proof uploaded and clear tracking for this message
+      console.log('[DEBUG] Marking proof as uploaded and clearing tracking...');
+      const tracking = proofUploadTracking.get(originalMessageId);
+      console.log('[DEBUG] Attempting to get proofUploadTracking for originalMessageId:', originalMessageId);
+      console.log('[DEBUG] Current proofUploadTracking keys:', Array.from(proofUploadTracking.keys()));
+      
+      if (tracking) {
+        console.log('[DEBUG] Found tracking entry, marking as proofUploaded');
+        tracking.proofUploaded = true;
+        if (tracking.timeout) clearTimeout(tracking.timeout);
+        if (tracking.reminderTimeouts) {
+          console.log('[DEBUG] Clearing', tracking.reminderTimeouts.length, 'reminder timeouts');
+          tracking.reminderTimeouts.forEach(id => clearTimeout(id));
+        }
+      } else {
+        console.warn('[WARN] proofUploadTracking entry not found for:', originalMessageId, 'Available keys:', Array.from(proofUploadTracking.keys()));
+      }
+      proofUploadTracking.delete(originalMessageId);
+      console.log('[DEBUG] Sending success reply to user...');
+      message.reply(`✅ Proof image has been submitted and recorded!${isAdminUpload ? ' (Admin upload)' : ''}`);
+      console.log('[DEBUG] Deleting from waitingForProofUploads...');
+      waitingForProofUploads.delete(message.author.id);
+      console.log('[DEBUG] Proof upload processing completed successfully!');
+      return;
     } catch (e) {
       console.error('[ERROR] ❌ EXCEPTION IN PROOF UPLOAD PROCESSING ❌');
       console.error('[ERROR] Exception object:', e);
