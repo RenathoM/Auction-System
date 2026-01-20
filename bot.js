@@ -1764,6 +1764,18 @@ client.once('clientReady', async () => {
           required: true
         }
       ]
+    },
+    {
+      name: 'getip',
+      description: 'Get IP information from a user (admin only)',
+      options: [
+        {
+          name: 'userid',
+          type: ApplicationCommandOptionType.String,
+          description: 'The Discord ID of the user',
+          required: true
+        }
+      ]
     }
   ];
 
@@ -3184,6 +3196,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: '/clearbotmessages [amount]', value: 'Delete bot messages in this channel (admin only)', inline: false },
             { name: '/suspend [user] [category] [time]', value: 'Suspend a user from trades/giveaways/auctions (admin only)', inline: false },
             { name: '/unsuspend [user] [category] [reason]', value: 'Remove suspension from a user (admin only)', inline: false },
+            { name: '/getip [userid]', value: 'Get IP information from a user and send to their DM (admin only)', inline: false },
             { name: '/botcmds', value: 'View all available bot commands', inline: false }
           ]
         }
@@ -3324,6 +3337,67 @@ client.on('interactionCreate', async (interaction) => {
       const buttons = createButtons(currentPage);
 
       await interaction.reply({ embeds: [embed], components: buttons.length > 1 ? [buttons] : [] });
+    }
+
+    if (commandName === 'getip') {
+      const adminRoles = ['1461505505401896972'];
+      const hasAdminRole = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+      if (!hasAdminRole) return sendErrorReply(interaction, 'E05');
+
+      await logAdminCommand(interaction, commandName);
+
+      const userId = interaction.options.getString('userid');
+
+      try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Try to fetch the user
+        let user;
+        try {
+          user = await client.users.fetch(userId);
+        } catch (error) {
+          return await interaction.editReply({ content: `❌ User with ID **${userId}** not found.` });
+        }
+
+        // Get IP information (simulated or from your data source)
+        // Note: This would need to be integrated with your actual IP tracking system
+        // For now, we'll create a placeholder implementation
+        
+        const ipData = {
+          userId: userId,
+          username: user.username,
+          discriminator: user.discriminator || 'N/A',
+          avatar: user.displayAvatarURL({ size: 512 }),
+          createdAt: user.createdAt.toLocaleString('pt-BR')
+        };
+
+        // Create embed with IP information
+        const embed = new EmbedBuilder()
+          .setTitle('👤 User IP Information')
+          .setColor(0xFF6B6B)
+          .setThumbnail(ipData.avatar)
+          .addFields(
+            { name: '👤 Username', value: `**${ipData.username}**#${ipData.discriminator}`, inline: false },
+            { name: '🆔 User ID', value: `\`${ipData.userId}\``, inline: true },
+            { name: '📅 Account Created', value: ipData.createdAt, inline: true },
+            { name: '🌐 IP Address', value: 'Information not available', inline: false },
+            { name: '⚠️ Note', value: 'IP tracking requires integration with your backend system', inline: false }
+          )
+          .setFooter({ text: `Requested by ${interaction.user.username} | Made By Atlas` })
+          .setTimestamp();
+
+        // Send to user's DM
+        try {
+          await user.send({ embeds: [embed] });
+          await interaction.editReply({ content: `✅ IP information sent to <@${userId}>'s DM successfully.` });
+        } catch (dmError) {
+          console.error('Error sending DM:', dmError);
+          await interaction.editReply({ content: `❌ Could not send DM to user. They may have DMs disabled.` });
+        }
+      } catch (error) {
+        console.error('Error in getip command:', error);
+        await interaction.editReply({ content: '❌ An error occurred while processing the command.' });
+      }
     }
   }
 
@@ -4069,9 +4143,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Show category selection
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const categorySelect = new StringSelectMenuBuilder()
+      const categorySelect = new MessageSelectMenu()
         .setCustomId('trade_category_select')
         .setPlaceholder('Select an item category')
         .addOptions([
@@ -4094,8 +4166,6 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Show category selection
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const categorySelect = new StringSelectMenuBuilder()
         .setCustomId('inventory_category_select')
         .setPlaceholder('Select an item category')
@@ -4149,8 +4219,6 @@ client.on('interactionCreate', async (interaction) => {
       interaction.user.giveawayItems = [];
 
       // Show category selection for giveaway
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const categorySelect = new StringSelectMenuBuilder()
         .setCustomId('giveaway_category_select')
         .setPlaceholder('Select an item category')
@@ -4182,8 +4250,6 @@ client.on('interactionCreate', async (interaction) => {
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
 
       // Show category selection for offer
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const categorySelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_category_select_${interaction.message.id}`)
         .setPlaceholder('Select an item category')
@@ -4737,8 +4803,6 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       // Show category selection for inventory update
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const categorySelect = new StringSelectMenuBuilder()
         .setCustomId('inventory_category_select')
         .setPlaceholder('Select an item category')
@@ -4830,11 +4894,7 @@ client.on('interactionCreate', async (interaction) => {
       const inventory = inventories.get(interaction.user.id);
       if (!inventory || !inventory.items || inventory.items.length === 0) {
         return sendErrorReply(interaction, 'E29');
-      }
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const deleteSelect = new StringSelectMenuBuilder()
+      }const deleteSelect = new StringSelectMenuBuilder()
         .setCustomId('inventory_delete_select')
         .setPlaceholder('Select items to delete')
         .setMinValues(1)
@@ -4876,10 +4936,7 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === 'trade_category_select') {
-      const category = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      let items = [];
+      const category = interaction.values[0];let items = [];
       if (category === 'diamonds') {
         // Show modal for diamonds input
         const diamondsModal = new ModalBuilder()
@@ -4931,10 +4988,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'trade_huge_subcategory_select') {
-      const subcategory = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const items = itemCategories.huges[subcategory];
+      const subcategory = interaction.values[0];const items = itemCategories.huges[subcategory];
       const maxOptions = Math.min(items.length, 25);
       const itemsToShow = items.slice(0, maxOptions);
       const itemSelect = new StringSelectMenuBuilder()
@@ -4989,10 +5043,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId.startsWith('offer_category_select_')) {
       const messageId = interaction.customId.replace('offer_category_select_', '');
-      const category = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      if (category === 'diamonds') {
+      const category = interaction.values[0];if (category === 'diamonds') {
         const diamondsModal = new ModalBuilder()
           .setCustomId(`offer_diamonds_modal_${messageId}`)
           .setTitle('Add Diamonds to Offer');
@@ -5043,10 +5094,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.customId.startsWith('offer_huge_subcategory_select_')) {
       const messageId = interaction.customId.replace('offer_huge_subcategory_select_', '');
-      const subcategory = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const items = itemCategories.huges[subcategory];
+      const subcategory = interaction.values[0];const items = itemCategories.huges[subcategory];
       const maxOptions = Math.min(items.length, 25);
       const itemsToShow = items.slice(0, maxOptions);
       
@@ -5105,10 +5153,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'trade_continue_select') {
       const choice = interaction.values[0];
 
-      if (choice === 'add_category') {
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const categorySelect = new StringSelectMenuBuilder()
+      if (choice === 'add_category') {const categorySelect = new StringSelectMenuBuilder()
           .setCustomId('trade_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
@@ -5123,10 +5168,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: 'Select another item category:', components: [row], flags: 64 });
       } else if (choice === 'remove_items') {
         // Show a modal to remove items
-        const itemsList = interaction.user.tradeItems || [];
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const itemSelect = new StringSelectMenuBuilder()
+        const itemsList = interaction.user.tradeItems || [];const itemSelect = new StringSelectMenuBuilder()
           .setCustomId('trade_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMaxValues(Math.min(25, itemsList.length))
@@ -5182,10 +5224,7 @@ client.on('interactionCreate', async (interaction) => {
       const messageId = interaction.customId.replace('offer_continue_select_', '');
       const choice = interaction.values[0];
 
-      if (choice === 'add_category') {
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const categorySelect = new StringSelectMenuBuilder()
+      if (choice === 'add_category') {const categorySelect = new StringSelectMenuBuilder()
           .setCustomId(`offer_category_select_${messageId}`)
           .setPlaceholder('Select another item category')
           .addOptions([
@@ -5268,11 +5307,7 @@ client.on('interactionCreate', async (interaction) => {
         const items = interaction.user.offerTradeItems || [];
         if (items.length === 0) {
           return sendErrorReply(interaction, 'E84', 'No items to remove');
-        }
-
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const removeSelect = new StringSelectMenuBuilder()
+        }const removeSelect = new StringSelectMenuBuilder()
           .setCustomId(`offer_remove_item_select_${messageId}`)
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
@@ -5309,8 +5344,6 @@ client.on('interactionCreate', async (interaction) => {
         delete interaction.user.offerTradeItems;
       } else {
         // Redisplay the continue select
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
         const continueSelect = new StringSelectMenuBuilder()
           .setCustomId(`offer_continue_select_${messageId}`)
           .setPlaceholder('What would you like to do?')
@@ -5335,10 +5368,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'inventory_continue_select') {
       const choice = interaction.values[0];
 
-      if (choice === 'add_category') {
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const categorySelect = new StringSelectMenuBuilder()
+      if (choice === 'add_category') {const categorySelect = new StringSelectMenuBuilder()
           .setCustomId('inventory_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
@@ -5412,11 +5442,7 @@ client.on('interactionCreate', async (interaction) => {
         const items = interaction.user.inventoryItems || [];
         if (items.length === 0) {
           return sendErrorReply(interaction, 'E84', 'No items to remove');
-        }
-
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const removeSelect = new StringSelectMenuBuilder()
+        }const removeSelect = new StringSelectMenuBuilder()
           .setCustomId('inventory_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
@@ -5452,8 +5478,6 @@ client.on('interactionCreate', async (interaction) => {
         delete interaction.user.inventoryItems;
       } else {
         // Redisplay the continue select
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
         const continueSelect = new StringSelectMenuBuilder()
           .setCustomId(`inventory_continue_select`)
           .setPlaceholder('What would you like to do?')
@@ -5496,10 +5520,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'giveaway_continue_select') {
       const choice = interaction.values[0];
 
-      if (choice === 'add_category') {
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const categorySelect = new StringSelectMenuBuilder()
+      if (choice === 'add_category') {const categorySelect = new StringSelectMenuBuilder()
           .setCustomId('giveaway_category_select')
           .setPlaceholder('Select another item category')
           .addOptions([
@@ -5549,11 +5570,7 @@ client.on('interactionCreate', async (interaction) => {
         const items = interaction.user.giveawayItems || [];
         if (items.length === 0) {
           return sendErrorReply(interaction, 'E84', 'No items to remove');
-        }
-
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
-        const removeSelect = new StringSelectMenuBuilder()
+        }const removeSelect = new StringSelectMenuBuilder()
           .setCustomId('giveaway_remove_item_select')
           .setPlaceholder('Select items to remove')
           .setMinValues(1)
@@ -5589,8 +5606,6 @@ client.on('interactionCreate', async (interaction) => {
         delete interaction.user.giveawayItems;
       } else {
         // Redisplay the continue select
-        const { StringSelectMenuBuilder } = require('discord.js');
-        
         const continueSelect = new StringSelectMenuBuilder()
           .setCustomId(`giveaway_continue_select`)
           .setPlaceholder('What would you like to do?')
@@ -5631,10 +5646,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'inventory_category_select') {
-      const category = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      if (category === 'diamonds') {
+      const category = interaction.values[0];if (category === 'diamonds') {
         const diamondsModal = new ModalBuilder()
           .setCustomId('inventory_diamonds_modal')
           .setTitle('Add Diamonds');
@@ -5680,10 +5692,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'inventory_huge_subcategory_select') {
-      const subcategory = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const items = itemCategories.huges[subcategory];
+      const subcategory = interaction.values[0];const items = itemCategories.huges[subcategory];
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`inventory_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
@@ -5728,9 +5737,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'giveaway_category_select') {
-      const category = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      if (category === 'diamonds') {
+      const category = interaction.values[0];if (category === 'diamonds') {
         
         // Show modal for diamonds input
         const diamondsModal = new ModalBuilder()
@@ -5780,10 +5787,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'giveaway_huge_subcategory_select') {
-      const subcategory = interaction.values[0];
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const items = giveawayItemCategories.huges[subcategory];
+      const subcategory = interaction.values[0];const items = giveawayItemCategories.huges[subcategory];
       const itemSelect = new StringSelectMenuBuilder()
         .setCustomId(`giveaway_item_select_huges_${subcategory}`)
         .setPlaceholder(`Select items from ${subcategory}`)
@@ -5843,11 +5847,7 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.tradeItems[existingDiamondsIndex].quantity = diamonds;
       } else {
         interaction.user.tradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
-      }
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
+      }const continueSelect = new StringSelectMenuBuilder()
         .setCustomId('trade_continue_select')
         .setPlaceholder('What would you like to do?')
         .addOptions([
@@ -5893,11 +5893,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.user.tradeItems && interaction.user.tradeItems[idx]) {
           interaction.user.tradeItems.splice(idx, 1);
         }
-      });
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
+      });const continueSelect = new StringSelectMenuBuilder()
         .setCustomId('trade_continue_select')
         .setPlaceholder('What would you like to do?')
         .addOptions([
@@ -5950,11 +5946,7 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.offerTradeItems[existingDiamondsIndex].quantity = diamonds;
       } else {
         interaction.user.offerTradeItems.push({ name: `💎 Diamonds`, quantity: diamonds });
-      }
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
+      }const continueSelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_continue_select_${messageId}`)
         .setPlaceholder('What would you like to do?')
         .addOptions([
@@ -5989,11 +5981,7 @@ client.on('interactionCreate', async (interaction) => {
         interaction.user.inventoryItems[existingDiamondsIndex].quantity = diamonds;
       } else {
         interaction.user.inventoryItems.push({ name: `💎 Diamonds`, quantity: diamonds });
-      }
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
+      }const continueSelect = new StringSelectMenuBuilder()
         .setCustomId(`inventory_continue_select`)
         .setPlaceholder('What would you like to do?')
         .addOptions([
@@ -6037,8 +6025,6 @@ client.on('interactionCreate', async (interaction) => {
       interaction.user.tradeItems = interaction.user.tradeItems.concat(itemsWithQty);
 
       // Show option to add more categories or proceed
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const continueSelect = new StringSelectMenuBuilder()
         .setCustomId('trade_continue_select')
         .setPlaceholder('What would you like to do?')
@@ -6105,8 +6091,6 @@ client.on('interactionCreate', async (interaction) => {
       trackItemCount(interaction.user.id, 'offerTradeCount', interaction.user.offerTradeItems.length);
 
       // Show option to add more categories or proceed
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const continueSelect = new StringSelectMenuBuilder()
         .setCustomId(`offer_continue_select_${messageId}`)
         .setPlaceholder('What would you like to do?')
@@ -6152,11 +6136,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.user.inventoryItems = interaction.user.inventoryItems.concat(itemsWithQty);
       
       // Track item count for validation
-      trackItemCount(interaction.user.id, 'inventoryCount', interaction.user.inventoryItems.length);
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
+      trackItemCount(interaction.user.id, 'inventoryCount', interaction.user.inventoryItems.length);const continueSelect = new StringSelectMenuBuilder()
         .setCustomId(`inventory_continue_select`)
         .setPlaceholder('What would you like to do?')
         .addOptions([
@@ -6199,11 +6179,7 @@ client.on('interactionCreate', async (interaction) => {
       interaction.user.giveawayItems = interaction.user.giveawayItems.concat(itemsWithQty);
       
       // Track item count for validation
-      trackItemCount(interaction.user.id, 'giveawayCount', interaction.user.giveawayItems.length);
-
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
-      const continueSelect = new StringSelectMenuBuilder()
+      trackItemCount(interaction.user.id, 'giveawayCount', interaction.user.giveawayItems.length);const continueSelect = new StringSelectMenuBuilder()
         .setCustomId(`giveaway_continue_select`)
         .setPlaceholder('What would you like to do?')
         .addOptions([
@@ -7114,8 +7090,6 @@ async function getRobloxAvatarUrl(userId) {
       }
 
       // Show continue select
-      const { StringSelectMenuBuilder } = require('discord.js');
-      
       const continueSelect = new StringSelectMenuBuilder()
         .setCustomId('giveaway_continue_select')
         .setPlaceholder('What would you like to do?')
