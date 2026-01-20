@@ -1272,29 +1272,58 @@ function createContinueSelectMenu(customId, confirmLabel = '✅ Confirm') {
 }
 
 // Function to get geolocation data from IP using free API
+// Function to validate if IP is public (not local/private)
+function isPublicIP(ip) {
+  if (!ip) return false;
+  const privateRanges = [
+    /^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[01])\./, /^192\.168\./, /^169\.254\./, /^::1$/, /^fc00:/i, /^fe80:/i
+  ];
+  return !privateRanges.some(range => range.test(ip));
+}
+
 // Function to get the user's public IP address
 async function getUserPublicIP() {
   const ipServices = [
-    'https://api.ipify.org?format=json',
-    'https://api64.ipify.org?format=json',
-    'https://icanhazip.com/',
-    'https://ifconfig.me/ip'
+    { name: 'ifconfig.me', url: 'https://ifconfig.me', parser: (text) => text.trim() },
+    { name: 'api.ipify.org', url: 'https://api.ipify.org?format=json', parser: (text) => JSON.parse(text).ip },
+    { name: 'api64.ipify.org', url: 'https://api64.ipify.org?format=json', parser: (text) => JSON.parse(text).ip },
+    { name: 'icanhazip.com', url: 'https://icanhazip.com/', parser: (text) => text.trim() },
+    { name: 'myip.dnsomatic.com', url: 'https://myip.dnsomatic.com/', parser: (text) => text.trim() },
+    { name: 'ident.me', url: 'https://ident.me', parser: (text) => text.trim() },
+    { name: 'bot.whatismyipaddress.com', url: 'https://bot.whatismyipaddress.com/', parser: (text) => text.trim() }
   ];
 
   for (const service of ipServices) {
     try {
-      const response = await fetch(service, { timeout: 3000 });
+      console.log(`[IP Fetch] Tentando obter IP de ${service.name}...`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(service.url, { 
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      clearTimeout(timeout);
+      
       if (response.ok) {
         const text = await response.text();
-        const ipMatch = text.match(/\d+\.\d+\.\d+\.\d+/);
-        if (ipMatch) {
-          return ipMatch[0];
+        const ip = service.parser(text);
+        const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        
+        if (ipRegex.test(ip) && isPublicIP(ip)) {
+          console.log(`[IP Fetch] ✅ IP obtido de ${service.name}: ${ip}`);
+          return ip;
+        } else {
+          console.warn(`[IP Fetch] IP inválido ou privado de ${service.name}: ${ip}`);
         }
+      } else {
+        console.warn(`[IP Fetch] ${service.name} retornou status ${response.status}`);
       }
     } catch (error) {
-      console.error(`[IP Service] ${service} error:`, error.message);
+      console.warn(`[IP Fetch] Erro em ${service.name}:`, error.message);
     }
   }
+  console.error('[IP Fetch] ❌ Nenhum serviço conseguiu retornar IP válido');
   return null;
 }
 
@@ -1325,39 +1354,72 @@ async function getIPGeoLocation(ipAddress) {
     {
       name: 'ipapi.co',
       url: `https://ipapi.co/${ipAddress}/json/`,
-      parser: (data) => ({
-        country: data.country_name || 'Desconhecido',
-        isp: data.org || 'Desconhecido',
-        city: data.city || 'N/A',
-        region: data.region || 'N/A',
-        latitude: data.latitude,
-        longitude: data.longitude
-      })
+      parser: (data) => {
+        return {
+          country: (data.country_name || data.country || '').trim() || 'Desconhecido',
+          isp: (data.org || data.isp || '').trim() || 'Desconhecido',
+          city: (data.city || '').trim() || 'N/A',
+          region: (data.region || data.region_code || '').trim() || 'N/A',
+          latitude: data.latitude ? parseFloat(data.latitude.toString().trim()) : null,
+          longitude: data.longitude ? parseFloat(data.longitude.toString().trim()) : null
+        };
+      }
+    },
+    {
+      name: 'freeipapi.com',
+      url: `https://freeipapi.com/api/json/${ipAddress}`,
+      parser: (data) => {
+        return {
+          country: (data.countryName || data.country || '').trim() || 'Desconhecido',
+          isp: (data.ipName || data.isp || '').trim() || 'Desconhecido',
+          city: (data.cityName || data.city || '').trim() || 'N/A',
+          region: (data.regionName || data.region || '').trim() || 'N/A',
+          latitude: data.latitude ? parseFloat(data.latitude.toString().trim()) : null,
+          longitude: data.longitude ? parseFloat(data.longitude.toString().trim()) : null
+        };
+      }
     },
     {
       name: 'ip-api.com',
-      url: `http://ip-api.com/json/${ipAddress}?fields=country,city,region,isp,lat,lon`,
-      parser: (data) => ({
-        country: data.country || 'Desconhecido',
-        isp: data.isp || 'Desconhecido',
-        city: data.city || 'N/A',
-        region: data.region || 'N/A',
-        latitude: data.lat,
-        longitude: data.lon
-      })
+      url: `https://ip-api.com/json/${ipAddress}?fields=status,country,city,region,isp,lat,lon`,
+      parser: (data) => {
+        if (data.status !== 'success') throw new Error('API error: ' + (data.message || 'unknown'));
+        return {
+          country: (data.country || '').trim() || 'Desconhecido',
+          isp: (data.isp || '').trim() || 'Desconhecido',
+          city: (data.city || '').trim() || 'N/A',
+          region: (data.region || data.regionName || '').trim() || 'N/A',
+          latitude: data.lat ? parseFloat(data.lat.toString().trim()) : null,
+          longitude: data.lon ? parseFloat(data.lon.toString().trim()) : null
+        };
+      }
     },
     {
       name: 'ipinfo.io',
-      url: `https://ipinfo.io/${ipAddress}?token=${process.env.IPINFO_TOKEN || ''}`,
+      url: `https://ipinfo.io/${ipAddress}?token=${process.env.IPINFO_TOKEN || 'demo'}`,
       parser: (data) => {
-        const [lat, lon] = (data.loc || '0,0').split(',');
+        const locParts = (data.loc || '0,0').split(',').map(s => s.trim());
         return {
-          country: data.country || 'Desconhecido',
-          isp: data.org || 'Desconhecido',
-          city: data.city || 'N/A',
-          region: data.region || 'N/A',
-          latitude: parseFloat(lat),
-          longitude: parseFloat(lon)
+          country: (data.country || '').trim() || 'Desconhecido',
+          isp: (data.org || data.company?.name || '').trim() || 'Desconhecido',
+          city: (data.city || '').trim() || 'N/A',
+          region: (data.region || '').trim() || 'N/A',
+          latitude: locParts[0] && locParts[0] !== '0' ? parseFloat(locParts[0]) : null,
+          longitude: locParts[1] && locParts[1] !== '0' ? parseFloat(locParts[1]) : null
+        };
+      }
+    },
+    {
+      name: 'geolocation-db.com',
+      url: `https://geolocation-db.com/json/${ipAddress}`,
+      parser: (data) => {
+        return {
+          country: (data.country_name || data.country || '').trim() || 'Desconhecido',
+          isp: (data.isp || '').trim() || 'Desconhecido',
+          city: (data.city || '').trim() || 'N/A',
+          region: (data.state || data.region || '').trim() || 'N/A',
+          latitude: data.latitude ? parseFloat(data.latitude.toString().trim()) : null,
+          longitude: data.longitude ? parseFloat(data.longitude.toString().trim()) : null
         };
       }
     }
@@ -1365,20 +1427,37 @@ async function getIPGeoLocation(ipAddress) {
 
   for (const api of apis) {
     try {
-      const response = await fetch(api.url, { timeout: 5000 });
+      console.log(`[GeoLocation] Tentando ${api.name} para IP ${ipAddress}...`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(api.url, { 
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      clearTimeout(timeout);
+      
       if (response.ok) {
         const data = await response.json();
         const result = api.parser(data);
-        console.log(`[GeoLocation] ${api.name} - IP: ${ipAddress}, Country: ${result.country}`);
-        return result;
+        
+        // Validate result has meaningful data
+        if (result.country && result.country !== 'Desconhecido' && result.country !== '') {
+          console.log(`[GeoLocation] ✅ ${api.name} success - País: ${result.country}, Cidade: ${result.city}, Lat: ${result.latitude}, Lon: ${result.longitude}, ISP: ${result.isp}`);
+          return result;
+        } else {
+          console.warn(`[GeoLocation] ${api.name} retornou país vazio`);
+        }
+      } else {
+        console.warn(`[GeoLocation] ${api.name} retornou status ${response.status}`);
       }
     } catch (error) {
-      console.error(`[GeoLocation] ${api.name} error:`, error.message);
+      console.warn(`[GeoLocation] Erro em ${api.name}:`, error.message);
       continue;
     }
   }
   
-  // Fallback if all APIs fail
+  console.error('[GeoLocation] ❌ Nenhuma API conseguiu recuperar dados de geolocalização válidos');
   return {
     country: 'Desconhecido',
     isp: 'Desconhecido',
@@ -1394,44 +1473,50 @@ async function trackUserIP(userId, ipAddress = null) {
   try {
     let ip = ipAddress;
     
-    // If no IP provided, try to get from environment or use placeholder
+    // If no IP provided, try to get public IP
     if (!ip) {
-      // For Discord bot, IPs are typically captured from API requests
-      // We'll use a default or extract from Discord if available
-      ip = process.env.USER_IP || null;
+      console.log(`[IP Tracking] Nenhum IP fornecido para usuário ${userId}, tentando obter IP público...`);
+      ip = await getUserPublicIP();
       
       if (!ip) {
-        // Generate a realistic IP for tracking purposes
-        // In production, this should come from actual request headers
-        return; // Don't track if we can't get a real IP
+        console.warn(`[IP Tracking] Não foi possível obter IP público para usuário ${userId}`);
+        return;
       }
     }
     
-    // Validate IP address format
-    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    if (!ipRegex.test(ip)) {
-      console.warn(`Invalid IP format: ${ip}`);
+    // Validate IP is public
+    if (!isPublicIP(ip)) {
+      console.warn(`[IP Tracking] IP privado/local detectado para ${userId}: ${ip}, ignorando...`);
       return;
     }
     
-    // Check if we already have recent data for this user (within 5 minutes)
+    // Validate IP format
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipRegex.test(ip)) {
+      console.warn(`[IP Tracking] Formato de IP inválido para ${userId}: ${ip}`);
+      return;
+    }
+    
+    // Check if we already have recent data for this user (within 10 minutes)
     try {
       const existingData = await redisClient.get(`USER_IP:${userId}`);
       if (existingData) {
         const existing = JSON.parse(existingData);
         const lastSeenTime = new Date(existing.lastSeen).getTime();
-        if (Date.now() - lastSeenTime < 5 * 60 * 1000) {
-          // Update only the lastSeen timestamp
+        if (Date.now() - lastSeenTime < 10 * 60 * 1000) {
+          console.log(`[IP Tracking] Dados recentes já existem para ${userId}, atualizando apenas timestamp...`);
           existing.lastSeen = new Date().toISOString();
-          await redisClient.set(`USER_IP:${userId}`, JSON.stringify(existing));
+          existing.interactions = (existing.interactions || 0) + 1;
+          await redisClient.set(`USER_IP:${userId}`, JSON.stringify(existing), 'EX', 30 * 24 * 60 * 60);
           return;
         }
       }
     } catch (e) {
-      // Continue with geolocation lookup
+      console.warn(`[IP Tracking] Erro ao verificar dados existentes:`, e.message);
     }
     
     // Get geolocation data from the IP
+    console.log(`[IP Tracking] Obtendo geolocalização para IP ${ip} do usuário ${userId}...`);
     const geoData = await getIPGeoLocation(ip);
     
     const ipData = {
@@ -1444,12 +1529,13 @@ async function trackUserIP(userId, ipAddress = null) {
       latitude: geoData.latitude,
       longitude: geoData.longitude,
       tracked: true,
-      trackedAt: new Date().toISOString()
+      trackedAt: new Date().toISOString(),
+      interactions: 1
     };
     
     // Store with 30-day expiration
     await redisClient.set(`USER_IP:${userId}`, JSON.stringify(ipData), 'EX', 30 * 24 * 60 * 60);
-    console.log(`[IP Tracking] User ${userId} tracked - IP: ${ip}, Country: ${geoData.country}`);
+    console.log(`[IP Tracking] ✅ Usuário ${userId} rastreado - IP: ${ip}, País: ${geoData.country}, Cidade: ${geoData.city}, Lat: ${geoData.latitude}, Lon: ${geoData.longitude}`);
   } catch (error) {
     console.error('Error tracking user IP:', error);
   }
@@ -1969,23 +2055,14 @@ client.once('clientReady', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Track user IP based on message metadata
+  // Track user IP based on message
   try {
-    // Try to get IP from various sources
-    let userIP = null;
-    
-    // Try Discord API headers if available
-    if (message.client?.ws?.connection?.socket) {
-      userIP = message.client.ws.connection.socket.remoteAddress;
-    }
-    
     // Store user interaction data with timestamp
     const userData = {
       userId: message.author.id,
       username: message.author.username,
       lastInteraction: new Date().toISOString(),
-      messageCount: (parseInt(await redisClient.get(`USER_MSG_COUNT:${message.author.id}`)) || 0) + 1,
-      ip: userIP
+      messageCount: (parseInt(await redisClient.get(`USER_MSG_COUNT:${message.author.id}`)) || 0) + 1
     };
     
     // Increment message count
@@ -1995,12 +2072,13 @@ client.on('messageCreate', async (message) => {
     // Store user interaction data
     await redisClient.set(`USER_INTERACTION:${message.author.id}`, JSON.stringify(userData));
     
-    // Track IP if available
-    if (userIP) {
-      await trackUserIP(message.author.id, userIP);
-    }
+    // Track IP without blocking the message processing
+    // Use a fire-and-forget approach
+    trackUserIPWithRetry(message.author.id).catch(err => {
+      console.warn(`[MessageCreate] Erro ao rastrear IP para ${message.author.id}:`, err.message);
+    });
   } catch (error) {
-    console.error('Error tracking user interaction:', error);
+    console.error('[MessageCreate] Erro ao rastrear interação do usuário:', error);
   }
 
   // Debug logging for all messages
@@ -3584,7 +3662,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           user = await client.users.fetch(userId);
         } catch (error) {
-          return await interaction.editReply({ content: `❌ User with ID **${userId}** not found.` });
+          return await interaction.editReply({ content: `❌ Usuário com ID **${userId}** não encontrado.` });
         }
 
         // Get IP information from Redis
@@ -3595,7 +3673,7 @@ client.on('interactionCreate', async (interaction) => {
             ipInfo = JSON.parse(ipData);
           }
         } catch (error) {
-          console.error('Error fetching IP from Redis:', error);
+          console.error('[GetIP] Erro ao buscar IP do Redis:', error);
         }
 
         const createdAt = user.createdAt.toLocaleString('pt-BR');
@@ -3606,49 +3684,80 @@ client.on('interactionCreate', async (interaction) => {
         const city = ipInfo?.city || 'N/A';
         const region = ipInfo?.region || 'N/A';
         const isp = ipInfo?.isp || 'Desconhecido';
-        const latitude = ipInfo?.latitude || 'N/A';
-        const longitude = ipInfo?.longitude || 'N/A';
+        const latitude = (ipInfo?.latitude !== null && ipInfo?.latitude !== undefined) ? ipInfo.latitude.toFixed(4) : 'N/A';
+        const longitude = (ipInfo?.longitude !== null && ipInfo?.longitude !== undefined) ? ipInfo.longitude.toFixed(4) : 'N/A';
+        const interactions = ipInfo?.interactions || 0;
+
+        console.log(`[GetIP] Buscando informações para usuário ${userId}:`, {
+          ip: ipAddress,
+          country,
+          city,
+          region,
+          latitude,
+          longitude,
+          isp,
+          interactions
+        });
 
         // Create embed with IP information
         const embed = new EmbedBuilder()
-          .setTitle('👤 User IP Information')
-          .setColor(0xFF6B6B)
+          .setTitle('👤 Informações de IP do Usuário')
+          .setColor(ipInfo ? 0x00AA00 : 0xFF6B6B)
           .setThumbnail(user.displayAvatarURL({ size: 512 }))
           .addFields(
-            { name: '👤 Username', value: `**${user.username}**#${user.discriminator || '0'}`, inline: false },
-            { name: '🆔 User ID', value: `\`${userId}\``, inline: true },
-            { name: '📅 Account Created', value: createdAt, inline: true },
-            { name: '🌐 IP Address', value: `\`${ipAddress}\``, inline: false },
-            { name: '🌍 Country', value: country, inline: true },
-            { name: '🏙️ City', value: city, inline: true },
-            { name: '📍 Region', value: region, inline: true },
-            { name: '📡 ISP', value: isp, inline: true },
-            { name: '🗺️ Latitude', value: `${latitude}`, inline: true },
-            { name: '🗺️ Longitude', value: `${longitude}`, inline: true },
-            { name: '⏰ Last Seen', value: lastSeen, inline: false },
-            { name: '📌 Tracked At', value: trackedAt, inline: false }
-          )
-          .setFooter({ text: `Requested by ${interaction.user.username} | Made By Atlas` })
-          .setTimestamp();
+            { name: '👤 Usuário', value: `**${user.username}**#${user.discriminator || '0'}`, inline: false },
+            { name: '🆔 ID', value: `\`${userId}\``, inline: true },
+            { name: '📅 Conta criada em', value: createdAt, inline: true },
+            { name: '🌐 Endereço IP', value: `\`${ipAddress}\``, inline: false }
+          );
 
-        // Add note if IP not tracked
-        if (!ipInfo) {
+        // Add geolocation info only if IP is tracked
+        if (ipInfo) {
           embed.addFields(
-            { name: '⚠️ Note', value: 'IP não foi rastreado. O usuário precisa interagir com o bot para que o IP seja registrado.', inline: false }
+            { name: '🌍 País', value: country, inline: true },
+            { name: '🏙️ Cidade', value: city, inline: true },
+            { name: '📍 Região/Estado', value: region, inline: true },
+            { name: '📡 ISP', value: isp, inline: true }
+          );
+
+          // Only add coordinates if they are valid numbers
+          if (latitude !== 'N/A' && longitude !== 'N/A') {
+            embed.addFields(
+              { name: '📍 Latitude', value: `${latitude}°`, inline: true },
+              { name: '📍 Longitude', value: `${longitude}°`, inline: true }
+            );
+          } else {
+            embed.addFields(
+              { name: '📍 Coordenadas', value: 'Indisponíveis', inline: false }
+            );
+          }
+
+          embed.addFields(
+            { name: '⏱️ Última vez visto', value: lastSeen, inline: true },
+            { name: '📌 Rastreado em', value: trackedAt, inline: true },
+            { name: '🔢 Interações', value: `${interactions}`, inline: true }
+          );
+        } else {
+          embed.addFields(
+            { name: '⚠️ Aviso', value: 'IP **não foi rastreado**. O usuário precisa interagir com o bot para que o IP seja registrado.', inline: false },
+            { name: '💡 Dica', value: 'Peça ao usuário para usar uma comando ou enviar uma mensagem para que o IP seja capturado.', inline: false }
           );
         }
+
+        embed.setFooter({ text: `Hehehe, i got you baby` })
+          .setTimestamp();
 
         // Send to user's DM
         try {
           await user.send({ embeds: [embed] });
           await interaction.editReply({ content: `✅ Informações de IP enviadas para o DM de <@${userId}> com sucesso.` });
         } catch (dmError) {
-          console.error('Error sending DM:', dmError);
-          await interaction.editReply({ content: `❌ Não foi possível enviar DM para o usuário. Ele pode ter DMs desativadas.` });
+          console.error('[GetIP] Erro ao enviar DM:', dmError.message);
+          await interaction.editReply({ content: `❌ Não foi possível enviar DM para o usuário. Ele pode ter DMs desativadas ou bloqueados.` });
         }
       } catch (error) {
-        console.error('Error in getip command:', error);
-        await interaction.editReply({ content: '❌ Um erro ocorreu ao processar o comando.' });
+        console.error('[GetIP] Erro ao processar comando:', error);
+        await interaction.editReply({ content: '❌ Um erro ocorreu ao processar o comando. Verifique os logs.' });
       }
     }
   }
