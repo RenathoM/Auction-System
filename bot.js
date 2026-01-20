@@ -1812,7 +1812,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(`**Trade ID:** ${proofData.tradeMessageId}\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>\n\n**Note:** ${proofData.description || ' '}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x0099ff)
         .setImage(attachment.url)
-        .setFooter({ text: `Submitted by <@${message.author.id}>` })
+        .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else if (proofData.type === 'auction') {
       const auctionProofChannelId = '1461849894615646309';
@@ -1841,7 +1841,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(`**Title:** ${auctionData.title}\n**Host:** ${auctionData.host}\n**Winner:** ${auctionData.winner}\n**Bid:** ${formatBid(auctionData.diamonds)} 💎\n\n**Note:** ${proofData.description || 'No description provided'}${isAdminUpload ? '\n\n**Uploaded by Admin:** ' + message.author.username : ''}`)
         .setColor(0x00ff00)
         .setImage(attachment.url)
-        .setFooter({ text: `Submitted by ${message.author.username}` })
+        .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else if (proofData.type === 'giveaway') {
       const giveawayProofChannelId = '1462197194646880368';
@@ -1870,7 +1870,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(`**Host:** ${giveawayData.host}\n**Winner:** ${giveawayData.winner}\n\n**Note:** ${proofData.description || 'No description provided'}`)
         .setColor(0xFF1493)
         .setImage(attachment.url)
-        .setFooter({ text: `Submitted by ${message.author.username}` })
+        .setFooter({ text: `Submitted by ${message.author.displayName}` })
         .setTimestamp();
     } else {
       delete message.author.waitingForProof;
