@@ -121,6 +121,7 @@ const ERROR_CODES = {
   'E53': 'User not found',
   'E54': 'Operation timed out',
   'E55': 'Rate limit exceeded - try again in a moment',
+  'E99': 'An unexpected error occurred. Please try again.',
   
   // File upload errors (56-60)
   'E56': 'Please upload an image file',
@@ -283,16 +284,25 @@ async function applySuspension(guild, userId, type, adminId = null, customDurati
     const roleId = SUSPENSION_ROLES[type];
     if (!roleId) return;
 
-    // Add role
-    await member.roles.add(roleId).catch(() => null);
+    // Check if already suspended
+    const existingSuspension = userSuspensions.get(userId);
+    let duration = customDuration ? parseDuration(customDuration) : SUSPENSION_DURATION;
+    let startTime = Date.now();
 
-    // Calculate duration
-    const duration = customDuration ? parseDuration(customDuration) : SUSPENSION_DURATION;
+    if (existingSuspension && existingSuspension.type === type) {
+      // Add to existing duration
+      const remainingTime = (existingSuspension.startTime + existingSuspension.duration) - Date.now();
+      duration = Math.max(0, remainingTime) + duration;
+      startTime = Date.now() - (existingSuspension.duration - remainingTime); // Adjust start time to keep end time correct
+    } else {
+      // Add role if not already suspended
+      await member.roles.add(roleId).catch(() => null);
+    }
 
     // Record suspension
     userSuspensions.set(userId, {
       type,
-      startTime: Date.now(),
+      startTime,
       roleId,
       duration
     });
@@ -315,7 +325,7 @@ async function applySuspension(guild, userId, type, adminId = null, customDurati
           { name: '⏰ Duration', value: formatDuration(duration), inline: true },
           { name: '🎭 Role Added', value: `<@&${roleId}>`, inline: true },
           { name: '📅 Suspended At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-          { name: '⏳ Expires At', value: `<t:${Math.floor((Date.now() + duration) / 1000)}:F>`, inline: true },
+          { name: '⏳ Expires At', value: `<t:${Math.floor((startTime + duration) / 1000)}:F>`, inline: true },
           { name: '📋 Reason', value: customReason || `Failed to upload proof image for ${type} within 9 minutes timeout`, inline: false },
           { name: '🚫 Restrictions', value: getSuspensionRestrictions(type), inline: false }
         )
@@ -1151,7 +1161,7 @@ async function logAddFieldSafelyErrors(client) {
 // Helper function to create standard embed footer and thumbnail
 function getStandardEmbedFooter() {
   return {
-    text: 'Version 1.0.9 | Made By Atlas'
+    text: 'Version 1.1.3 | Made By Atlas'
   };
 }
 
@@ -2456,7 +2466,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Current Bid:** ${formatBid(currentBid)} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+          .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           const channel = interaction.guild.channels.cache.get(auction.channelId);
@@ -2694,13 +2704,30 @@ client.on('interactionCreate', async (interaction) => {
         // Check if user is already suspended for this category
         const existingSuspension = checkSuspension(targetUser.id, category.toLowerCase());
         if (existingSuspension) {
-          return await interaction.editReply({ content: `❌ User <@${targetUser.id}> is already suspended for ${category.toLowerCase()} activities.` });
+          // Add time to existing suspension
+          const additionalDuration = parseDuration(timeStr);
+          const remainingTime = existingSuspension.timeRemaining;
+          const newDuration = remainingTime + additionalDuration;
+          
+          // Update suspension
+          userSuspensions.set(targetUser.id, {
+            type: category.toUpperCase(),
+            startTime: Date.now() - (existingSuspension.duration - remainingTime),
+            roleId: existingSuspension.roleId,
+            duration: newDuration
+          });
+
+          // Reschedule role removal
+          setTimeout(async () => {
+            await removeSuspension(interaction.guild, targetUser.id);
+          }, newDuration);
+
+          await interaction.editReply({ content: `✅ Added ${formatDuration(additionalDuration)} to <@${targetUser.id}>'s existing ${category} suspension. New total remaining: ${formatDuration(newDuration)}.` });
+        } else {
+          // Apply new suspension
+          await applySuspension(interaction.guild, targetUser.id, category, interaction.user.id, parseDuration(timeStr), `Manually suspended by admin`);
+          await interaction.editReply({ content: `✅ User <@${targetUser.id}> has been suspended for ${category} activities for ${formatDuration(parseDuration(timeStr))}.` });
         }
-
-        // Apply suspension
-        await applySuspension(interaction.guild, targetUser.id, category, interaction.user.id, parseDuration(timeStr), `Manually suspended by admin`);
-
-        await interaction.editReply({ content: `✅ User <@${targetUser.id}> has been suspended for ${category} activities for ${formatDuration(parseDuration(timeStr))}.` });
       } catch (error) {
         console.error('Error suspending user:', error);
         await interaction.editReply({ content: '❌ An error occurred while suspending the user.' });
@@ -3290,7 +3317,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('Bid List')
         .setDescription(bidList)
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -3410,7 +3437,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle('🎁 Giveaway')
         .setDescription(giveaway.description ? `**${giveaway.description}**\n\n**Click the button below to enter the giveaway!**` : '**Click the button below to enter the giveaway!**')
         .setColor(0xFF1493)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const giveawayItemsField = totalPages > 1 
@@ -3479,7 +3506,7 @@ client.on('interactionCreate', async (interaction) => {
               .setTitle('🎁 Giveaway')
               .setDescription(giveaway.description ? `**${giveaway.description}**\n\n**Ended by host**` : '**Ended by host**')
               .setColor(0xFF0000) // Red color
-              .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+              .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
               .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
             const giveawayItemsText = formatItemsText(giveaway.items);
@@ -3532,7 +3559,7 @@ client.on('interactionCreate', async (interaction) => {
       const embed = new EmbedBuilder()
         .setTitle('🎁 Giveaway Ended!')
         .setColor(0xFF1493)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' });
 
       // Winner field
       addFieldSafely(embed, 'Winner', `**${winner.user}**`, false);
@@ -3543,28 +3570,67 @@ client.on('interactionCreate', async (interaction) => {
 
       addFieldSafely(embed, 'Total Entries', giveaway.entries.length.toString(), true);
 
-      // Add Upload Proof Image button
+      // Create private channel for giveaway
+      const host = await interaction.guild.members.fetch(giveaway.host.id);
+      const winnerMember = await interaction.guild.members.fetch(winner.user.id);
+      const channelName = `giveaway-${giveaway.host.id}-${winner.user.id}`;
+      const giveawayChannel = await interaction.guild.channels.create({
+        name: channelName,
+        type: 0, // text channel
+        permissionOverwrites: [
+          {
+            id: interaction.guild.id,
+            deny: ['ViewChannel'],
+          },
+          {
+            id: giveaway.host.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+          },
+          {
+            id: winner.user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+          },
+        ],
+      });
+
+      // Send DMs
+      try {
+        await host.send(`🎉 Your giveaway has ended! The winner is <@${winner.user.id}>! Check the channel: ${giveawayChannel}`);
+      } catch (e) {
+        console.error('Error sending DM to host:', e);
+      }
+      try {
+        await winnerMember.send(`🎉 Congratulations! You won the giveaway hosted by <@${giveaway.host.id}>! Check the channel: ${giveawayChannel}`);
+      } catch (e) {
+        console.error('Error sending DM to winner:', e);
+      }
+
+      // Send embed in the new channel
+      const proofEmbed = new EmbedBuilder()
+        .setTitle('Giveaway Proof Required')
+        .setDescription(`**Host:** <@${giveaway.host.id}>\n**Winner:** <@${winner.user.id}>\n\nPlease upload proof image of the completed giveaway.`)
+        .setColor(0xffa500)
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' });
+
       const proofButton = new ButtonBuilder()
         .setCustomId(`upload_proof_giveaway_${Date.now()}`)
         .setLabel('Upload Proof Image')
         .setStyle(ButtonStyle.Primary);
 
-      const row = new ActionRowBuilder().addComponents(proofButton);
-
-      const channel = interaction.guild.channels.cache.get(giveaway.channelId);
-      const proofMessage = await channel.send({ embeds: [embed], components: [row] });
+      const proofMessageInChannel = await giveawayChannel.send({ embeds: [proofEmbed], components: [new ActionRowBuilder().addComponents(proofButton)] });
 
       // Store finished giveaway data for proof handler
-      finishedGiveaways.set(proofMessage.id, {
+      finishedGiveaways.set(proofMessageInChannel.id, {
         host: giveaway.host,
         winner: winner.user,
         items: giveaway.items,
         channelId: giveaway.channelId,
-        giveawayChannelId: '1462197194646880368'
+        giveawayChannelId: giveawayChannel.id
       });
 
-      // Notify winner
-      await channel.send(`🎉 Congratulations ${winner.user}! You won the giveaway!`);
+      // Notify in original channel
+      const channel = interaction.guild.channels.cache.get(giveaway.channelId);
+      await channel.send(`🎉 Giveaway ended! Winner: ${winner.user}. Check your DMs for the giveaway channel.`);
 
       // Decrement giveaway count for host
       const hostId = giveaway.host.id;
@@ -3866,7 +3932,75 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Select an item category for your offer:', components: [row], flags: 64 });
     }
 
-    if (interaction.customId.startsWith('trade_accept_')) {
+    if (interaction.customId.startsWith('trade_view_offers_')) {
+      try {
+        const parts = interaction.customId.replace('trade_view_offers_', '').split('_');
+        const messageId = parts[0];
+        const page = parseInt(parts[1]) || 1;
+        const trade = trades.get(messageId);
+        if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
+        if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
+
+        const offersPerPage = 5;
+        const totalPages = Math.ceil(trade.offers.length / offersPerPage);
+        const validPage = Math.max(1, Math.min(page, totalPages));
+        const start = (validPage - 1) * offersPerPage;
+        const end = start + offersPerPage;
+        const pageOffers = trade.offers.slice(start, end);
+
+        // Create embed showing offers for this page
+        const embed = new EmbedBuilder()
+          .setTitle('Trade Offers')
+          .setDescription(`Select an offer to accept or decline. Page ${validPage}/${totalPages}`)
+          .setColor(0x0099ff)
+          .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
+          .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
+
+        const components = [];
+        pageOffers.forEach((offer, index) => {
+          const globalIndex = start + index;
+          const offerText = `${offer.user.username}${offer.diamonds > 0 ? ` (+ ${formatBid(offer.diamonds)} 💎)` : ''}\n${formatItemsText(offer.items)}`;
+          addFieldSafely(embed, `Offer ${globalIndex + 1} by ${offer.user.username}`, offerText, false);
+
+          const acceptButton = new ButtonBuilder()
+            .setCustomId(`trade_accept_offer_${messageId}_${globalIndex}`)
+            .setLabel(`Accept Offer ${globalIndex + 1}`)
+            .setStyle(ButtonStyle.Success);
+
+          const declineButton = new ButtonBuilder()
+            .setCustomId(`trade_decline_offer_${messageId}_${globalIndex}`)
+            .setLabel(`Decline Offer ${globalIndex + 1}`)
+            .setStyle(ButtonStyle.Danger);
+
+          components.push(new ActionRowBuilder().addComponents(acceptButton, declineButton));
+        });
+
+        // Add pagination buttons if needed
+        if (totalPages > 1) {
+          const prevButton = new ButtonBuilder()
+            .setCustomId(`trade_view_offers_${messageId}_${validPage - 1}`)
+            .setLabel('Previous')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(validPage === 1);
+
+          const nextButton = new ButtonBuilder()
+            .setCustomId(`trade_view_offers_${messageId}_${validPage + 1}`)
+            .setLabel('Next')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(validPage === totalPages);
+
+          components.push(new ActionRowBuilder().addComponents(prevButton, nextButton));
+        }
+
+        await interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
+      } catch (error) {
+        console.error('Error displaying trade offers:', error);
+        await sendErrorReply(interaction, 'E99', 'An error occurred while loading offers. Please try again.');
+      }
+    }
+
+    if (interaction.customId.startsWith('trade_accept_offer_')) {
+      try {
       // Check suspension
       const suspension = checkSuspension(interaction.user.id, 'trade');
       if (suspension) {
@@ -3878,25 +4012,81 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      const messageId = interaction.customId.replace('trade_accept_', '');
+      const parts = interaction.customId.replace('trade_accept_offer_', '').split('_');
+      const messageId = parts[0];
+      const offerIndex = parseInt(parts[1]);
       const trade = trades.get(messageId);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
       if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
+      if (offerIndex < 0 || offerIndex >= trade.offers.length) return sendErrorReply(interaction, 'E09', 'Invalid offer');
 
-      // Accept the last offer
-      const lastOffer = trade.offers[trade.offers.length - 1];
+      const acceptedOffer = trade.offers[offerIndex];
       trade.accepted = true;
-      trade.acceptedUser = lastOffer.user;
+      trade.acceptedUser = acceptedOffer.user;
 
-      // Update embed and ping both users
+      // Create private channel for trade
+      const host = await interaction.guild.members.fetch(trade.host.id);
+      const guest = await interaction.guild.members.fetch(acceptedOffer.user.id);
+      const channelName = `trade-${trade.host.id}-${acceptedOffer.user.id}`;
+      const tradeChannel = await interaction.guild.channels.create({
+        name: channelName,
+        type: 0, // text channel
+        permissionOverwrites: [
+          {
+            id: interaction.guild.id,
+            deny: ['ViewChannel'],
+          },
+          {
+            id: trade.host.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+          },
+          {
+            id: acceptedOffer.user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+          },
+        ],
+      });
+
+      // Send DMs
+      try {
+        await host.send(`✅ Your trade offer has been accepted by <@${acceptedOffer.user.id}>! Check the channel: ${tradeChannel}`);
+      } catch (e) {
+        console.error('Error sending DM to host:', e);
+      }
+      try {
+        await guest.send(`✅ Your trade offer has been accepted by <@${trade.host.id}>! Check the channel: ${tradeChannel}`);
+      } catch (e) {
+        console.error('Error sending DM to guest:', e);
+      }
+
+      // Send embed in the new channel
+      const proofEmbed = new EmbedBuilder()
+        .setTitle('Trade Proof Required')
+        .setDescription(`**Host:** <@${trade.host.id}>\n**Guest:** <@${acceptedOffer.user.id}>\n\nPlease upload proof image of the completed trade.`)
+        .setColor(0xffa500)
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' });
+
+      const proofButton = new ButtonBuilder()
+        .setCustomId(`upload_proof_trade_${messageId}`)
+        .setLabel('Upload Proof Image')
+        .setStyle(ButtonStyle.Primary);
+
+      await tradeChannel.send({ embeds: [proofEmbed], components: [new ActionRowBuilder().addComponents(proofButton)] });
+
+      // Update embed
       await updateTradeEmbed(interaction.guild, trade, messageId);
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`✅ Trade accepted! <@${trade.host.id}> and <@${lastOffer.user.id}>, your trade has been accepted.`);
+      await channel.send(`✅ Trade accepted! <@${trade.host.id}> and <@${acceptedOffer.user.id}>, check your DMs for the trade channel.`);
 
       await interaction.reply({ content: 'Trade accepted!', flags: MessageFlags.Ephemeral });
+      } catch (error) {
+        console.error('Error accepting trade offer:', error);
+        await sendErrorReply(interaction, 'E99', 'An error occurred while accepting the offer. Please try again.');
+      }
     }
 
-    if (interaction.customId.startsWith('trade_decline_')) {
+    if (interaction.customId.startsWith('trade_decline_offer_')) {
+      try {
       // Check suspension
       const suspension = checkSuspension(interaction.user.id, 'trade');
       if (suspension) {
@@ -3908,21 +4098,37 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      const messageId = interaction.customId.replace('trade_decline_', '');
+      const parts = interaction.customId.replace('trade_decline_offer_', '').split('_');
+      const messageId = parts[0];
+      const offerIndex = parseInt(parts[1]);
       const trade = trades.get(messageId);
       if (!trade) return sendErrorReply(interaction, 'E07', 'Trade not found');
       if (trade.host.id !== interaction.user.id) return sendErrorReply(interaction, 'E03');
+      if (offerIndex < 0 || offerIndex >= trade.offers.length) return sendErrorReply(interaction, 'E09', 'Invalid offer');
 
-      // Decline the last offer
-      const lastOffer = trade.offers[trade.offers.length - 1];
-      trade.offers.pop();
+      const declinedOffer = trade.offers[offerIndex];
+
+      // Send DM to declined user
+      try {
+        const declinedUser = await interaction.guild.members.fetch(declinedOffer.user.id);
+        await declinedUser.send(`❌ Your trade offer for the trade hosted by <@${trade.host.id}> has been declined.`);
+      } catch (e) {
+        console.error('Error sending DM to declined user:', e);
+      }
+
+      // Remove the offer
+      trade.offers.splice(offerIndex, 1);
 
       // Update embed
       await updateTradeEmbed(interaction.guild, trade, messageId);
       const channel = interaction.guild.channels.cache.get(trade.channelId);
-      await channel.send(`❌ Trade offer from <@${lastOffer.user.id}> has been declined.`);
+      await channel.send(`❌ Trade offer from <@${declinedOffer.user.id}> has been declined.`);
 
       await interaction.reply({ content: 'Offer declined!', flags: MessageFlags.Ephemeral });
+      } catch (error) {
+        console.error('Error declining trade offer:', error);
+        await sendErrorReply(interaction, 'E99', 'An error occurred while declining the offer. Please try again.');
+      }
     }
 
     if (interaction.customId.startsWith('trade_delete_')) {
@@ -5735,7 +5941,7 @@ client.on('interactionCreate', async (interaction) => {
   const embed = new EmbedBuilder()
     .setTitle('📦 Inventory')
     .setColor(0x00a8ff)
-    .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+    .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
     .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
   // AUTHOR CONFIGURATION (Roblox Avatar)
@@ -5944,7 +6150,7 @@ async function getRobloxAvatarUrl(userId) {
         .setTitle('🎁 Giveaway')
         .setDescription(description ? `**${description}**\n\n**Click the button below to enter the giveaway!**` : '**Click the button below to enter the giveaway!**')
         .setColor(0xFF1493)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format giveaway items with pagination
@@ -6063,7 +6269,7 @@ async function getRobloxAvatarUrl(userId) {
               const endEmbed = new EmbedBuilder()
                 .setTitle('🎁 Giveaway Ended!')
                 .setColor(0xFF1493)
-                .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
+                .setFooter({ text: 'Version 1.1.3 | Made By Atlas' });
               
               // Winner field
               addFieldSafely(endEmbed, 'Winner', `**${winner.user}**`, false);
@@ -6087,7 +6293,7 @@ async function getRobloxAvatarUrl(userId) {
             .setTitle('🎁 Giveaway')
             .setDescription(currentGiveaway.description ? `**${currentGiveaway.description}**\n\n**Click the button below to enter the giveaway!**` : '**Click the button below to enter the giveaway!**')
             .setColor(0xFF1493)
-            .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+            .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
             .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
           
           const giveawayItemsText = formatItemsText(currentGiveaway.items);
@@ -6169,7 +6375,7 @@ async function getRobloxAvatarUrl(userId) {
         .setTitle('Trade Offer')
         .setDescription(`**Host:** <@${interaction.user.id}>\n**Status:** Waiting for offers`)
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format host items with pagination info
@@ -6259,7 +6465,7 @@ async function getRobloxAvatarUrl(userId) {
         .setTitle('Trade Offer')
         .setDescription(`**Host:** <@${trade.host.id}>\n**Status:** Waiting for offers`)
         .setColor(0x0099ff)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       // Format with pagination info
@@ -6429,7 +6635,7 @@ async function getRobloxAvatarUrl(userId) {
         .setTitle(title)
         .setDescription(`${description}\n\n**Looking For:** ${model}\n**Starting Price:** ${formatBid(startingPrice)} 💎\n**Current Bid:** ${formatBid(startingPrice)} 💎\n**Time Remaining:** ${time}s\n**Hosted by:** ${interaction.user}`)
         .setColor(0x00ff00)
-        .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+        .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
         .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
       const row = new ActionRowBuilder()
@@ -6470,7 +6676,7 @@ async function getRobloxAvatarUrl(userId) {
           .setTitle(auction.title)
           .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Current Bid:** ${formatBid(currentBid)} 💎\n**Time Remaining:** ${remaining}s\n**Hosted by:** ${auction.host}`)
           .setColor(0x00ff00)
-          .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+          .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
           .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
         try {
           await message.edit({ embeds: [updatedEmbed], components: [row] });
@@ -6587,7 +6793,6 @@ async function getRobloxAvatarUrl(userId) {
     }
   }
 });
-
 async function updateTradeEmbed(guild, trade, messageId) {
   if (!guild) return;
   
@@ -6602,7 +6807,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
     const embed = new EmbedBuilder()
       .setTitle('Trade Offer')
       .setColor(trade.accepted ? 0x00ff00 : 0x0099ff)
-      .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+      .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
       .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
     if (trade.accepted) {
@@ -6611,10 +6816,8 @@ async function updateTradeEmbed(guild, trade, messageId) {
       } else {
         embed.setDescription(`**Status:** ✅ Trade Accepted\n\n**Host:** <@${trade.host.id}>\n**Guest:** <@${trade.acceptedUser.id}>`);
       }
-    } else if (trade.offers.length > 0) {
-      embed.setDescription(`**Status:** Awaiting Host Decision\n\n**Host:** <@${trade.host.id}>`);
     } else {
-      embed.setDescription(`**Status:** Waiting for offers\n\n**Host:** <@${trade.host.id}>`);
+      embed.setDescription(`**Status:** ${trade.offers.length > 0 ? `Received ${trade.offers.length} offer${trade.offers.length > 1 ? 's' : ''}` : 'Waiting for offers'}\n\n**Host:** <@${trade.host.id}>`);
     }
 
     // Paginate host items
@@ -6629,19 +6832,7 @@ async function updateTradeEmbed(guild, trade, messageId) {
       true
     );
 
-    if (trade.offers.length > 0 && !trade.accepted) {
-      const lastOffer = trade.offers[trade.offers.length - 1];
-      const guestPaginationData = paginateTradeItems(lastOffer.items, 1, 10);
-      const guestItemsField = guestPaginationData.totalPages > 1 
-        ? `${guestPaginationData.text}\n\n*Page 1/${guestPaginationData.totalPages}*`
-        : guestPaginationData.text;
-
-      addFieldSafely(embed,
-        `${lastOffer.user.displayName || lastOffer.user.username}${lastOffer.diamonds > 0 ? ` (+ ${formatBid(lastOffer.diamonds)} 💎)` : ''}`,
-        guestItemsField,
-        true
-      );
-    } else if (trade.accepted) {
+    if (trade.accepted) {
       const acceptedOffer = trade.offers.find(o => o.user.id === trade.acceptedUser.id);
       if (acceptedOffer) {
         const acceptedPaginationData = paginateTradeItems(acceptedOffer.items, 1, 10);
@@ -6660,17 +6851,17 @@ async function updateTradeEmbed(guild, trade, messageId) {
     let components = [];
 
     if (!trade.accepted && trade.offers.length > 0) {
-      const acceptButton = new ButtonBuilder()
-        .setCustomId(`trade_accept_${messageId}`)
-        .setLabel('Accept')
-        .setStyle(ButtonStyle.Success);
+      const viewOffersButton = new ButtonBuilder()
+        .setCustomId(`trade_view_offers_${messageId}`)
+        .setLabel(`View Offers (${trade.offers.length})`)
+        .setStyle(ButtonStyle.Secondary);
 
-      const declineButton = new ButtonBuilder()
-        .setCustomId(`trade_decline_${messageId}`)
-        .setLabel('Decline')
+      const deleteButton = new ButtonBuilder()
+        .setCustomId(`trade_delete_${Date.now()}`)
+        .setLabel('Delete')
         .setStyle(ButtonStyle.Danger);
 
-      components.push(new ActionRowBuilder().addComponents(acceptButton, declineButton));
+      components.push(new ActionRowBuilder().addComponents(viewOffersButton, deleteButton));
     } else if (trade.accepted) {
       // Add Upload Proof Image button for accepted trades
       const proofButton = new ButtonBuilder()
@@ -6727,7 +6918,7 @@ async function endAuction(channel) {
       .setTitle(auction.title)
       .setDescription(`${auction.description}\n\n**Looking For:** ${auction.model}\n**Starting Price:** ${formatBid(auction.startingPrice)} 💎\n**Winning Bid:** ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}\n**Winner:** ${winner.user}\n**Hosted by:** ${auction.host}`)
       .setColor(0xff0000) // Red color
-      .setFooter({ text: 'Version 1.0.9 | Made By Atlas' })
+      .setFooter({ text: 'Version 1.1.3 | Made By Atlas' })
       .setThumbnail('https://media.discordapp.net/attachments/1461378333278470259/1461514275976773674/B2087062-9645-47D0-8918-A19815D8E6D8.png?ex=696ad4bd&is=6969833d&hm=2f262b12ac860c8d92f40789893fda4f1ea6289bc5eb114c211950700eb69a79&=&format=webp&quality=lossless&width=1376&height=917');
 
     await message.edit({ embeds: [finalEmbed], components: [] }); // Remove buttons
@@ -6735,32 +6926,68 @@ async function endAuction(channel) {
     console.error('Error updating auction embed:', e);
   }
 
-  const embed = new EmbedBuilder()
-    .setTitle('Auction Ended!')
-    .setDescription(`**Title:** ${auction.title}\n**Winner:** ${winner.user}\n**Bid:** ${winner.diamonds} 💎${winner.items ? ` and ${winner.items}` : ''}`)
-    .setColor(0xff0000)
-    .setFooter({ text: 'Version 1.0.9 | Made By Atlas' });
+  // Create private channel for auction
+  const host = await channel.guild.members.fetch(auction.host.id);
+  const winnerMember = await channel.guild.members.fetch(winner.user.id);
+  const channelName = `auction-${auction.host.id}-${winner.user.id}`;
+  const auctionChannel = await channel.guild.channels.create({
+    name: channelName,
+    type: 0, // text channel
+    permissionOverwrites: [
+      {
+        id: channel.guild.id,
+        deny: ['ViewChannel'],
+      },
+      {
+        id: auction.host.id,
+        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+      },
+      {
+        id: winner.user.id,
+        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+      },
+    ],
+  });
 
-  // Add Upload Proof Image button
+  // Send DMs
+  try {
+    await host.send(`🏆 Your auction "${auction.title}" has ended! The winner is <@${winner.user.id}> with a bid of ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}! Check the channel: ${auctionChannel}`);
+  } catch (e) {
+    console.error('Error sending DM to host:', e);
+  }
+  try {
+    await winnerMember.send(`🏆 Congratulations! You won the auction "${auction.title}" hosted by <@${auction.host.id}> with a bid of ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}! Check the channel: ${auctionChannel}`);
+  } catch (e) {
+    console.error('Error sending DM to winner:', e);
+  }
+
+  // Send embed in the new channel
+  const proofEmbed = new EmbedBuilder()
+    .setTitle('Auction Proof Required')
+    .setDescription(`**Host:** <@${auction.host.id}>\n**Winner:** <@${winner.user.id}>\n**Bid:** ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}\n\nPlease upload proof image of the completed auction.`)
+    .setColor(0xffa500)
+    .setFooter({ text: 'Version 1.1.3 | Made By Atlas' });
+
   const proofButton = new ButtonBuilder()
-    .setCustomId(`upload_proof_auction_${channel.id}`)
+    .setCustomId(`upload_proof_auction_${Date.now()}`)
     .setLabel('Upload Proof Image')
     .setStyle(ButtonStyle.Primary);
 
-  const row = new ActionRowBuilder().addComponents(proofButton);
-
-  const proofMessage = await channel.send({ embeds: [embed], components: [row] });
+  const proofMessageInChannel = await auctionChannel.send({ embeds: [proofEmbed], components: [new ActionRowBuilder().addComponents(proofButton)] });
 
   // Store finished auction data for proof handler
-  finishedAuctions.set(proofMessage.id, {
+  finishedAuctions.set(proofMessageInChannel.id, {
     host: auction.host,
     title: auction.title,
     winner: winner.user,
     diamonds: winner.diamonds,
     items: winner.items,
     channelId: channel.id,
-    auctionChannelId: '1461849894615646309'
+    auctionChannelId: auctionChannel.id
   });
+
+  // Notify in original channel
+  await channel.send(`🏆 Auction "${auction.title}" ended! Winner: ${winner.user} with ${formatBid(winner.diamonds)} 💎${winner.items ? ` and ${winner.items}` : ''}. Check your DMs for the auction channel.`);
 }
 
 client.login(process.env.TOKEN);
