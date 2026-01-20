@@ -3,7 +3,7 @@ global.ReadableStream = ReadableStream;
 
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder, userMention } = require('discord.js');
+const { Client, Intents, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ApplicationCommandOptionType, MessageFlags, StringSelectMenuBuilder, userMention } = require('discord.js');
 const config = require('./config.json');
 const fs = require('fs');
 const redis = require('redis');
@@ -45,7 +45,7 @@ function updateVersionFile(category, newVersion) {
   }
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({ intents: new Intents().add(['GUILDS', 'GUILD_MESSAGES', 'MESSAGE_CONTENT']) });
 
 // Redis client
 const redisClient = redis.createClient({
