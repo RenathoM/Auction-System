@@ -7126,12 +7126,17 @@ async function updateTradeEmbed(guild, trade, messageId) {
         .setLabel(`View Offers (${trade.offers.length})`)
         .setStyle(ButtonStyle.Secondary);
 
+      const makeOfferButton = new ButtonBuilder()
+        .setCustomId('trade_offer_button')
+        .setLabel('Make Offer')
+        .setStyle(ButtonStyle.Primary);
+
       const deleteButton = new ButtonBuilder()
         .setCustomId(`trade_delete_${Date.now()}`)
         .setLabel('Delete')
         .setStyle(ButtonStyle.Danger);
 
-      components.push(new ActionRowBuilder().addComponents(viewOffersButton, deleteButton));
+      components.push(new ActionRowBuilder().addComponents(viewOffersButton, makeOfferButton, deleteButton));
     } else if (trade.accepted) {
       const deleteButton = new ButtonBuilder()
         .setCustomId(`trade_delete_${Date.now()}`)
